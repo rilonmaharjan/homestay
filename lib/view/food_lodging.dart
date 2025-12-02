@@ -47,7 +47,7 @@ class _FoodLoggingDialogState extends State<FoodLoggingDialog> {
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Log', style: TextStyle(color: primaryColor))),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Add', style: TextStyle(color: primaryColor))),
         ],
       ),
     );
