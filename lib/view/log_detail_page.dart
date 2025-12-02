@@ -3,8 +3,11 @@
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
 
-import 'package:homestay/database/database_helper.dart';
-import 'package:homestay/view/add_log.dart';
+// Assuming your DatabaseHelper path is correct
+import 'package:homestay/database/database_helper.dart'; 
+// Assuming your UpsertLogPage is correctly named and located
+import 'package:homestay/view/add_log.dart'; 
+
 
 class LogDetailPage extends StatefulWidget {
   final int logId;
@@ -21,6 +24,11 @@ class LogDetailPage extends StatefulWidget {
 }
 
 class _LogDetailPageState extends State<LogDetailPage> {
+  // Use the same modern color scheme
+  static const Color primaryColor = Color(0xFF4A148C); // Deep Purple 
+  static const Color backgroundColor = Color(0xFFF0F4F8); // Off-white/light gray
+  static const Color cardColor = Colors.white;
+
   Map<String, dynamic>? _logData;
   bool _isLoading = true;
 
@@ -29,6 +37,8 @@ class _LogDetailPageState extends State<LogDetailPage> {
     super.initState();
     _fetchLogDetails();
   }
+
+  // --- Data and Navigation Logic (Remains unchanged) ---
 
   Future<void> _fetchLogDetails() async {
     setState(() => _isLoading = true);
@@ -42,7 +52,6 @@ class _LogDetailPageState extends State<LogDetailPage> {
   void _navigateToEditPage() async {
     if (_logData == null) return;
     
-    // Navigate and wait for the result (true if data was updated)
     final bool? result = await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => UpsertLogPage(
@@ -52,24 +61,27 @@ class _LogDetailPageState extends State<LogDetailPage> {
       ),
     );
 
-    // If data was updated, refresh this detail page and trigger the home page refresh
     if (result == true) {
-      await _fetchLogDetails(); // Refresh details on this page
-      widget.onLogUpdated();    // Trigger home page list refresh
+      await _fetchLogDetails();
+      widget.onLogUpdated();
     }
   }
 
+  // --- New UI Helper Widgets ---
+
   Widget _buildImage(Uint8List? imageBlob) {
     if (imageBlob != null && imageBlob.isNotEmpty) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 16.0),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8.0),
-          child: Image.memory(
-            imageBlob,
-            fit: BoxFit.cover,
-            height: 200,
-            width: double.infinity,
+      return Container(
+        padding: const EdgeInsets.only(bottom: 20.0),
+        child: Center(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16.0),
+            child: Image.memory(
+              imageBlob,
+              fit: BoxFit.cover,
+              height: 250,
+              width: 300,
+            ),
           ),
         ),
       );
@@ -77,20 +89,64 @@ class _LogDetailPageState extends State<LogDetailPage> {
     return const SizedBox.shrink();
   }
 
-  Widget _buildDetailItem(String title, String? value) {
+  Widget _buildDetailItem(String title, String? value, {IconData? icon}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey[700]),
+          Row(
+            children: [
+              if (icon != null) Icon(icon, size: 18, color: primaryColor.withOpacity(0.7)),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: Colors.black54,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 4),
-          Text(value ?? 'N/A', style: const TextStyle(fontSize: 15)),
-          const Divider(),
+          Text(
+            value ?? 'N/A',
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const Divider(height: 16),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDetailCard({required String title, required List<Widget> children}) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 20),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 4,
+      color: cardColor,
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: primaryColor,
+              ),
+            ),
+            const Divider(color: primaryColor, thickness: 1, height: 20),
+            ...children,
+          ],
+        ),
       ),
     );
   }
@@ -98,38 +154,68 @@ class _LogDetailPageState extends State<LogDetailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: Text(_logData?['name'] ?? 'Guest Details'),
+        title: Text(
+          _logData?['name'] ?? 'Guest Details',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: primaryColor,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
-          // The EDIT Button
           IconButton(
-            icon: const Icon(Icons.edit),
+            icon: const Icon(Icons.edit, color: Colors.white),
             onPressed: _isLoading ? null : _navigateToEditPage,
           ),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: primaryColor))
           : _logData == null
-              ? const Center(child: Text('Log entry not found.'))
+              ? const Center(child: Text('Log entry not found.', style: TextStyle(color: Colors.red)))
               : SingleChildScrollView(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // --- Photo Section ---
                       _buildImage(_logData!['citizenImageBlob'] as Uint8List?),
 
-                      _buildDetailItem('Guest Name', _logData!['name']),
-                      _buildDetailItem('Address', _logData!['address']),
-                      _buildDetailItem('Arrival Date', _logData!['arrivalDate']?.toString().substring(0, 10)),
-                      _buildDetailItem('Check-in Time', _logData!['checkInTime']),
-                      _buildDetailItem('Check-Out Date', _logData!['checkOutDate']?.toString().substring(0, 10)),
-                      _buildDetailItem('Check-Out Time', _logData!['checkOutTime']),
-                      _buildDetailItem('Citizen Number', _logData!['citizenNumber']),
-                      _buildDetailItem('Contact Number', _logData!['contactNumber']),
-                      _buildDetailItem('Guests', _logData!['numberOfGuests']?.toString()),
-                      _buildDetailItem('Room Number', _logData!['roomNumber']),
-                      _buildDetailItem('Drive Link', _logData!['citizenImageDriveLink'] ?? 'Not Uploaded'),
+                      // --- Identity Card ---
+                      _buildDetailCard(
+                        title: 'Guest Identity',
+                        children: [
+                          _buildDetailItem('Guest Name', _logData!['name'], icon: Icons.person),
+                          _buildDetailItem('Citizen Number', _logData!['citizenNumber'], icon: Icons.badge),
+                          _buildDetailItem('Contact Number', _logData!['contactNumber'], icon: Icons.phone),
+                          _buildDetailItem('Address', _logData!['address'], icon: Icons.location_on),
+                        ],
+                      ),
+
+                      // --- Booking Card ---
+                      _buildDetailCard(
+                        title: 'Booking & Room Details',
+                        children: [
+                          _buildDetailItem('Arrival Date', _logData!['arrivalDate']?.toString().substring(0, 10), icon: Icons.calendar_today),
+                          _buildDetailItem('Check-in Time', _logData!['checkInTime'], icon: Icons.access_time),
+                          _buildDetailItem('Check-Out Date', _logData!['checkOutDate']?.toString().substring(0, 10) ?? 'N/A', icon: Icons.calendar_today_outlined),
+                          _buildDetailItem('Check-Out Time', _logData!['checkOutTime'] ?? 'N/A', icon: Icons.access_time_outlined),
+                          _buildDetailItem('Room Number', _logData!['roomNumber'], icon: Icons.meeting_room),
+                          _buildDetailItem('Guests', _logData!['numberOfGuests']?.toString(), icon: Icons.people),
+                        ],
+                      ),
+                      
+                      // --- Other Info Card ---
+                      _buildDetailCard(
+                        title: 'Other Information',
+                        children: [
+                          _buildDetailItem('Occupation', _logData!['occupation'] ?? 'N/A', icon: Icons.work),
+                          _buildDetailItem('Reason of Stay', _logData!['reasonOfStay'] ?? 'N/A', icon: Icons.info),
+                          _buildDetailItem('Relation with Partner', _logData!['relationWithPartner'] ?? 'N/A', icon: Icons.people_alt_outlined),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
                     ],
                   ),
                 ),

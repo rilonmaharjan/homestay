@@ -198,7 +198,6 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
       'checkOutDate': checkOutDateStr,
       'checkOutTime': checkOutTimeStr,
       'citizenImageBlob': _citizenImageBytes, // Use the BLOB bytes
-      'citizenImageDriveLink': widget.initialData?['citizenImageDriveLink'] ?? '', // Preserve existing link or default to empty
     };
 
     // 3. Insert or Update
