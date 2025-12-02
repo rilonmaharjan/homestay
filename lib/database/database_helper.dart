@@ -73,6 +73,32 @@ class DatabaseHelper {
     return await db.query('homestay', orderBy: 'id DESC');
   }
 
+  Future<int> updateLog(int id, Map<String, dynamic> row) async {
+    final db = await database;
+    return await db.update(
+      'homestay',
+      row,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  // In DatabaseHelper.dart
+
+  Future<Map<String, dynamic>?> getLogById(int id) async {
+    final db = await database;
+    final result = await db.query(
+      'homestay',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (result.isNotEmpty) {
+      return result.first;
+    }
+    return null;
+  }
+
   Future<int> deleteLog(int id) async {
     final db = await database;
     return await db.delete('homestay', where: 'id = ?', whereArgs: [id]);
@@ -136,10 +162,6 @@ class DatabaseHelper {
       fileMetadata.name = 'homestay_backup_${DateTime.now().toIso8601String().substring(0, 10)}.db';
       fileMetadata.mimeType = 'application/x-sqlite3'; // Standard SQLite MIME type
 
-      // Optional: Search for an existing folder and upload there
-      // You can implement folder finding/creation logic here.
-      // For simplicity, this uploads to the root of My Drive.
-
       // 3. Upload the file
       final response = await driveApi.files.create(
         fileMetadata,
@@ -152,6 +174,102 @@ class DatabaseHelper {
       debugPrint('✅ Database Uploaded Successfully! File ID: ${response.id}');
     } catch (e) {
       debugPrint('❌ Error during Drive upload: $e');
+    } finally {
+      httpClient.close();
+    }
+  }
+
+  // Helper function to search for the database file
+  Future<drive.File?> _getLatestDatabaseFile(drive.DriveApi driveApi) async {
+    // Search for files named 'homestay_backup...' with the correct MIME type
+    final String query = 
+        "name contains 'homestay_backup_' and mimeType = 'application/x-sqlite3'";
+    
+    // List files, ordered by creation date descending, only get the top 1
+    final fileList = await driveApi.files.list(
+      q: query,
+      $fields: 'files(id, name)',
+      orderBy: 'createdTime desc',
+      pageSize: 1,
+    );
+
+    return fileList.files?.isNotEmpty == true ? fileList.files!.first : null;
+  }
+
+  /// Downloads the latest database backup from Google Drive and saves it locally.
+  Future<bool> downloadDatabaseFromDrive() async {
+    final httpClient = await _getAuthenticatedHttpClient();
+    if (httpClient == null) return false;
+
+    try {
+      final driveApi = drive.DriveApi(httpClient);
+      final latestFile = await _getLatestDatabaseFile(driveApi);
+
+      if (latestFile == null || latestFile.id == null) {
+        debugPrint('No database backup found in Google Drive.');
+        return false;
+      }
+
+      // 1. Get the local path where the file must be saved
+      final dbPath = await getDatabasesPath();
+      final path = join(dbPath, 'homestay.db');
+      final dbFile = File(path);
+
+      // 2. Download the file content
+      // Use the download request and cast the response to Media (Stream<List<int>>)
+      final drive.Media downloadedMedia = await driveApi.files.get(
+        latestFile.id!,
+        downloadOptions: drive.DownloadOptions.fullMedia,
+      ) as drive.Media;
+      
+      // 3. Write the streamed bytes to the local file
+      final sink = dbFile.openWrite();
+      await downloadedMedia.stream.pipe(sink);
+      await sink.close();
+
+      debugPrint('✅ Database downloaded and saved successfully to: $path');
+      return true;
+
+    } catch (e) {
+      debugPrint('❌ Error during Drive download: $e');
+      return false;
+    } finally {
+      httpClient.close();
+    }
+  }
+
+  // so the file can be overwritten and reloaded.
+  Future<void> closeDatabase() async {
+    if (_database != null) {
+      await _database!.close();
+      _database = null; // Set to null so get database reinitializes it
+    }
+  }
+
+  /// Deletes the latest database backup from Google Drive.
+  Future<bool> deleteDatabaseFromDrive() async {
+    final httpClient = await _getAuthenticatedHttpClient();
+    if (httpClient == null) return false;
+
+    try {
+      final driveApi = drive.DriveApi(httpClient);
+      // Use the same helper to find the latest file
+      final fileToDelete = await _getLatestDatabaseFile(driveApi);
+
+      if (fileToDelete == null || fileToDelete.id == null) {
+        debugPrint('No database backup found to delete.');
+        return false;
+      }
+
+      // Call the delete API endpoint
+      await driveApi.files.delete(fileToDelete.id!);
+
+      debugPrint('✅ Database file deleted successfully from Drive.');
+      return true;
+
+    } catch (e) {
+      debugPrint('❌ Error during Drive deletion: $e');
+      return false;
     } finally {
       httpClient.close();
     }

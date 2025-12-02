@@ -1,6 +1,7 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:homestay/view/settings_page.dart';
 import 'package:intl/intl.dart';
 import 'package:homestay/view/add_log.dart';
 import '../database/database_helper.dart';
@@ -22,7 +23,6 @@ class _HomePageState extends State<HomePage> {
   List<Map<String, dynamic>> logs = [];
   List<Map<String, dynamic>> filteredLogs = [];
   bool isLoading = true;
-  bool isUpLoading = false;
 
   String searchQuery = '';
   String filterOption = 'All';
@@ -125,8 +125,13 @@ class _HomePageState extends State<HomePage> {
         ),
         actions: [
           IconButton(
-            icon: isUpLoading == true ? SizedBox(height: 15.sp, width: 15.sp, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2,)) : const Icon(Icons.upload, color: Colors.white),
-            onPressed: _uploadDatabase,
+            icon: const Icon(Icons.settings, color: Colors.white),
+            onPressed: (){
+              // Navigate to settings page
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => SettingsPage(onLogsRefreshed: _fetchLogs)),
+              );
+            },
           ),
         ],
         backgroundColor: primaryColor,
@@ -149,14 +154,20 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     _buildFilterAndSearchRow(),
                     isLoading
-                        ? const Center(child: CircularProgressIndicator(color: primaryColor))
+                        ? SizedBox(
+                          height: 600.0.h,
+                          child: const Center(child: CircularProgressIndicator(color: primaryColor))
+                        )
                         : filteredLogs.isEmpty
-                            ? const Center(
-                                child: Text(
-                                  'No logs found.',
-                                  style: TextStyle(fontSize: 16, color: Colors.black54),
+                            ? SizedBox(
+                              height: 600.0.h,
+                              child: const Center(
+                                  child: Text(
+                                    'No logs found.',
+                                    style: TextStyle(fontSize: 16, color: Colors.black54),
+                                  ),
                                 ),
-                              )
+                            )
                             : ListView.builder(
                                 shrinkWrap: true,
                                 physics: NeverScrollableScrollPhysics(),
@@ -329,13 +340,26 @@ class _HomePageState extends State<HomePage> {
       child: ListTile(
         contentPadding: const EdgeInsets.all(12),
         leading: _buildProfileImage(item['citizenImageLocalPath']),
-        title: Text(
-          item['name'] ?? 'No name',
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-            color: primaryColor,
-          ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              item['name'] ?? 'No name',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: primaryColor,
+              ),
+            ),
+            Text(
+              'Room ${item['roomNumber'] ?? ""}',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: primaryColor,
+              ),
+            ),
+          ],
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -385,21 +409,18 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildProfileImage(String? path) {
-    if (path != null && path.isNotEmpty) {
-      final file = File(path);
-      if (file.existsSync()) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Image.file(
-            file,
-            width: 60,
-            height: 60,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _buildFallbackIcon(),
-          ),
-        );
-      }
+  Widget _buildProfileImage(Uint8List? bytes) {
+    if (bytes != null && bytes.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.memory(
+          bytes,
+          width: 60,
+          height: 60,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildFallbackIcon(),
+        ),
+      );
     }
     return _buildFallbackIcon();
   }
@@ -422,9 +443,28 @@ class _HomePageState extends State<HomePage> {
       onSelected: (v) {
         if (v == 'delete') {
           _deleteLog(id);
+        } else if (v == 'checkout') {
+          // Call the method to handle checkout
+          _showCheckOutDialog(id); 
         }
       },
       itemBuilder: (_) => [
+        // 1. CHECK OUT Option
+        const PopupMenuItem(
+          value: 'checkout',
+          child: Row(
+            children: [
+              Icon(Icons.logout, color: Colors.blue),
+              SizedBox(width: 8),
+              Text('Check Out', style: TextStyle(color: Colors.blue)),
+            ],
+          ),
+        ),
+        
+        // Divider (Optional, for separation)
+        const PopupMenuDivider(), 
+
+        // 2. DELETE Option
         const PopupMenuItem(
           value: 'delete',
           child: Row(
@@ -443,27 +483,122 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  //upload to drive
-  Future<void> _uploadDatabase() async {
-    setState(() => isUpLoading = true); // Assuming you have an isUpLoading boolean
+  // Helper to convert TimeOfDay to a simple string (e.g., "14:30")
+  String _timeOfDayToString(TimeOfDay t) {
+    final now = DateTime.now();
+    final dt = DateTime(now.year, now.month, now.day, t.hour, t.minute);
+    return DateFormat.jm().format(dt);
+  }
+
+  // In your StatefulWidget class (e.g., the Home Page)
+  TimeOfDay _stringToTimeOfDay(String timeString) {
     try {
-      await DatabaseHelper.instance.uploadDatabaseToDrive();
-      // Show a success message (e.g., using a SnackBar)
+      // Assuming timeString is in "HH:mm" format (e.g., "14:30")
+      final parts = timeString.split(':');
+      final hour = int.tryParse(parts[0]) ?? 0;
+      final minute = int.tryParse(parts[1]) ?? 0;
+      return TimeOfDay(hour: hour, minute: minute);
+    } catch (_) {
+      return TimeOfDay.now(); // Fallback to current time on error
+    }
+  }
+
+  // ----------------------------------------------------------------------
+  Future<void> _showCheckOutDialog(int id) async {
+    // 1. Fetch the existing log data
+    final log = await DatabaseHelper.instance.getLogById(id);
+    if (log == null) {
+      // Handle case where log isn't found
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Database backup successful!')),
+          const SnackBar(content: Text('Error: Log not found.')),
         );
+      }
+      return;
+    }
+
+    // Get current check-out values from the database
+    final String? dbCheckOutDate = log['checkOutDate'] as String?;
+    final String? dbCheckOutTime = log['checkOutTime'] as String?;
+
+    // Set initial date/time: Use DB value if valid, otherwise use DateTime.now()
+    DateTime initialDate = DateTime.now();
+    if (dbCheckOutDate != null && dbCheckOutDate.isNotEmpty) {
+      try {
+        // Parse the 'YYYY-MM-DD' string from the database
+        initialDate = DateTime.parse(dbCheckOutDate); 
+      } catch (_) {
+        // Keep DateTime.now() if parsing fails
+      }
+    }
+
+    TimeOfDay initialTime = TimeOfDay.now();
+    if (dbCheckOutTime != null && dbCheckOutTime.isNotEmpty) {
+      // Convert the 'HH:mm' string to TimeOfDay
+      initialTime = _stringToTimeOfDay(dbCheckOutTime); 
+    }
+
+
+    // 2. Prompt for Date
+    final DateTime? selectedDate = await showDatePicker(
+      // ignore: use_build_context_synchronously
+      context: context,
+      // Use the fetched initialDate
+      initialDate: initialDate, 
+      firstDate: initialDate.subtract(const Duration(days: 30)),
+      lastDate: initialDate.add(const Duration(days: 30)),
+      helpText: 'Select Check-Out Date',
+    );
+
+    if (selectedDate == null) return; // User cancelled date selection
+
+    // 3. Prompt for Time
+    final TimeOfDay? selectedTime = await showTimePicker(
+      // ignore: use_build_context_synchronously
+      context: context,
+      // Use the fetched initialTime
+      initialTime: initialTime, 
+      helpText: 'Select Check-Out Time',
+    );
+
+    if (selectedTime == null) return; // User cancelled time selection
+
+    // 4. Perform the update
+    _performCheckOut(id, selectedDate, selectedTime);
+  }
+
+  // ----------------------------------------------------------------------
+  Future<void> _performCheckOut(
+    int id,
+    DateTime date,
+    TimeOfDay time,
+  ) async {
+    // Format the date and time as required by your database schema
+    final checkOutDateString = date.toIso8601String().substring(0, 10);
+    final checkOutTimeString = _timeOfDayToString(time);
+
+    try {
+      // 1. Data to update
+      final updateData = {
+        'checkOutDate': checkOutDateString,
+        'checkOutTime': checkOutTimeString,
+      };
+
+      // 2. Call the new update method in your DatabaseHelper
+      await DatabaseHelper.instance.updateLog(id, updateData);
+
+      // 3. Refresh the log list in the UI
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Log successfully checked out.')),
+        );
+        _fetchLogs(); // Refresh your list of logs
       }
     } catch (e) {
-      // Show an error message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: $e')),
+          SnackBar(content: Text('Failed to check out log: $e')),
         );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => isUpLoading = false);
       }
     }
   }

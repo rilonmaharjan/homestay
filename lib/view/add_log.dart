@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../database/database_helper.dart';
@@ -34,7 +34,7 @@ class _AddLogPageState extends State<AddLogPage> {
   DateTime? _checkOutDate;
   TimeOfDay _checkOutTime = const TimeOfDay(hour: 12, minute: 0); // default 12:00 PM
 
-  File? _citizenImageFile;
+  Uint8List? _citizenImageBytes;
   bool _saving = false;
 
   @override
@@ -47,22 +47,20 @@ class _AddLogPageState extends State<AddLogPage> {
   }
 
   // --- Image Handling ---
-  Future<void> _pickImage() async {
-    final XFile? picked = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-    if (picked != null) {
-      // Create a unique file name
-      final fileName = '${_name.text.trim().isNotEmpty ? _name.text.trim() : 'guest'}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      // Note: In a real Flutter app, you'd use path_provider to get a temp directory for copies.
-      // For this environment, we rely on the simulator's file system structure.
-      try {
-        final saved = await File(picked.path).copy(fileName);
-        setState(() => _citizenImageFile = saved);
-      } catch (e) {
-        // Handle error if copy fails (e.g., in a constrained environment)
-        setState(() => _citizenImageFile = File(picked.path));
-      }
-    }
+Future<void> _pickImage() async {
+  final XFile? picked = await _picker.pickImage(
+    source: ImageSource.gallery,
+    imageQuality: 80,
+  );
+
+  if (picked != null) {
+    final bytes = await picked.readAsBytes();  // ← BLOB bytes
+    setState(() {
+      _citizenImageBytes = bytes;
+    });
   }
+}
+
 
   // --- Date & Time Pickers ---
   Future<void> _pickArrivalDate() async {
@@ -152,8 +150,6 @@ class _AddLogPageState extends State<AddLogPage> {
 
     // 3. Prepare data variables
     final createdAt = DateTime.now().toIso8601String();
-    // We keep the local path for local retrieval, but remove the driveLink variable
-    String localPath = _citizenImageFile?.path ?? ''; 
 
     // 4. Construct the data map, excluding the driveLink variable and any related logic
     final data = {
@@ -170,7 +166,7 @@ class _AddLogPageState extends State<AddLogPage> {
       'roomNumber': _roomNumber.text.trim(),
       'checkOutDate': _checkOutDate?.toIso8601String().substring(0, 10) ?? '',
       'checkOutTime': _timeOfDayToString(_checkOutTime),
-      'citizenImageLocalPath': localPath,
+      'citizenImageLocalPath': _citizenImageBytes,
       'citizenImageDriveLink': '', 
       'createdAt': createdAt,
     };
@@ -436,15 +432,20 @@ class _AddLogPageState extends State<AddLogPage> {
               _buildSectionCard(
                 title: 'Photo Proof',
                 children: [
-                  if (_citizenImageFile != null)
+                  if (_citizenImageBytes != null)
                     Column(
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(12),
-                          child: Image.file(_citizenImageFile!, width: 150, height: 150, fit: BoxFit.cover),
+                          child: Image.memory(
+                            _citizenImageBytes!,
+                            width: 150,
+                            height: 150,
+                            fit: BoxFit.cover,
+                          ),
                         ),
                         TextButton(
-                          onPressed: () => setState(() => _citizenImageFile = null),
+                          onPressed: () => setState(() => _citizenImageBytes = null),
                           child: const Text(
                             'Remove Photo',
                             style: TextStyle(color: Colors.red),
@@ -452,13 +453,15 @@ class _AddLogPageState extends State<AddLogPage> {
                         ),
                       ],
                     ),
-                  SizedBox(height: _citizenImageFile != null ? 8 : 0),
+
+                  SizedBox(height: _citizenImageBytes != null ? 8 : 0),
+
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       onPressed: _pickImage,
                       icon: const Icon(Icons.photo_camera_front, color: Colors.white),
-                      label: Text(_citizenImageFile == null ? 'Select Citizen Photo' : 'Change Photo'),
+                      label: Text(_citizenImageBytes == null ? 'Select Citizen Photo' : 'Change Photo'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryColor,
                         foregroundColor: Colors.white,
@@ -470,6 +473,7 @@ class _AddLogPageState extends State<AddLogPage> {
                   ),
                 ],
               ),
+
 
               const SizedBox(height: 10),
 
