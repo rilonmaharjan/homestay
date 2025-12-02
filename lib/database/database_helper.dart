@@ -17,6 +17,11 @@ import 'package:homestay/helper/google_client.dart';
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
   static Database? _database;
+  static const _guestConsumptionTable = 'guest_consumption';
+  static const _consumptionColumnLogId = 'logId';
+  static const _consumptionColumnFoodItemId = 'foodItemId';
+  static const _consumptionColumnQuantity = 'quantity';
+  static const _consumptionColumnPricePerUnit = 'pricePerUnit';
 
   DatabaseHelper._internal();
   factory DatabaseHelper() => _instance;
@@ -85,6 +90,18 @@ class DatabaseHelper {
       )
     ''');
 
+    await db.execute('''
+    CREATE TABLE $_guestConsumptionTable (
+      id INTEGER PRIMARY KEY,
+      $_consumptionColumnLogId INTEGER NOT NULL,
+      $_consumptionColumnFoodItemId INTEGER NOT NULL,
+      $_consumptionColumnQuantity INTEGER NOT NULL,
+      $_consumptionColumnPricePerUnit REAL NOT NULL,
+      FOREIGN KEY($_consumptionColumnLogId) REFERENCES guest_logs(id),
+      FOREIGN KEY($_consumptionColumnFoodItemId) REFERENCES food_items(id)
+    )
+  ''');
+
     // 3. New Table for Room Rates (Single global rate)
     await db.execute('''
       CREATE TABLE room_types (
@@ -95,8 +112,8 @@ class DatabaseHelper {
       )
     ''');
 
-    await db.insert('room_types', {'name': 'Standard Single', 'price': 40.0, 'description': 'Basic single occupancy room'}); 
-    await db.insert('room_types', {'name': 'Double Deluxe', 'price': 75.0, 'description': 'Premium room with double bed'});
+    await db.insert('room_types', {'name': 'Standard Single', 'price': 1000.0, 'description': 'Basic single occupancy room'}); 
+    await db.insert('room_types', {'name': 'Double Deluxe', 'price': 2000.0, 'description': 'Premium room with double bed'});
   }
 
   Future<int> insertLog(Map<String, dynamic> row) async {
@@ -333,20 +350,25 @@ class DatabaseHelper {
       return await db.insert('guest_food_consumption', row);
   }
 
+  // --- Add or replace this method in lib/database/database_helper.dart ---
   Future<List<Map<String, dynamic>>> getGuestConsumptionByLogId(int logId) async {
-      final db = await database;
-      return await db.rawQuery('''
-          SELECT 
-              gfc.*, 
-              fi.name as foodName
-          FROM 
-              guest_food_consumption gfc
-          JOIN 
-              food_items fi ON gfc.foodItemId = fi.id
-          WHERE 
-              gfc.logId = ?
-          ORDER BY gfc.id DESC
-      ''', [logId]);
+    final db = await database;
+    
+    // SQL JOIN statement to fetch the name of the item from the food_items table
+    const String sql = '''
+      SELECT 
+        c.logId, 
+        c.quantity, 
+        c.pricePerUnit, 
+        f.name AS foodName
+      FROM guest_consumption c
+      INNER JOIN food_items f ON c.foodItemId = f.id
+      WHERE c.logId = ?
+    ''';
+    
+    final List<Map<String, dynamic>> results = await db.rawQuery(sql, [logId]);
+    
+    return results;
   }
 
   // Room Rate Methods
@@ -386,5 +408,34 @@ class DatabaseHelper {
       final db = await database;
       final result = await db.query('room_types', where: 'id = ?', whereArgs: [id], limit: 1);
       return result.isNotEmpty ? result.first : null;
+  }
+
+  Future<int> bulkInsertGuestConsumption(List<Map<String, dynamic>> consumptionList) async {
+    final db = await database;
+    int insertedCount = 0;
+
+    // Use a transaction for fast, atomic insertion of multiple rows
+    await db.transaction((txn) async {
+      for (var row in consumptionList) {
+        // Ensure row contains only valid columns for insertion
+        final map = {
+          _consumptionColumnLogId: row['logId'],
+          _consumptionColumnFoodItemId: row['foodItemId'],
+          _consumptionColumnQuantity: row['quantity'],
+          _consumptionColumnPricePerUnit: row['pricePerUnit'],
+        };
+        
+        // Perform the insert operation within the transaction
+        await txn.insert(
+          _guestConsumptionTable,
+          map,
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+        insertedCount++;
+      }
+    });
+
+    // Return the count of successfully inserted records
+    return insertedCount;
   }
 }

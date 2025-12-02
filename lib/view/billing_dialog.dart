@@ -128,7 +128,7 @@ class _BillingCalculationDialogState extends State<BillingCalculationDialog> {
             ),
           ),
           Text(
-            '\$${amount.toStringAsFixed(2)}',
+            'Rs. ${amount.toStringAsFixed(2)}',
             style: TextStyle(
               fontWeight: isTotal ? FontWeight.bold : FontWeight.w600,
               fontSize: isTotal ? 18 : 16,
@@ -181,7 +181,7 @@ class _BillingCalculationDialogState extends State<BillingCalculationDialog> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text('${item['foodName']} x ${item['quantity']}', style: const TextStyle(fontSize: 14)),
-                            Text('\$${total.toStringAsFixed(2)}', style: const TextStyle(fontSize: 14)),
+                            Text('Rs. ${total.toStringAsFixed(2)}', style: const TextStyle(fontSize: 14)),
                           ],
                         ),
                       );

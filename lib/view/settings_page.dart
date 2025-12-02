@@ -49,7 +49,7 @@ class _SettingsPageState extends State<SettingsPage> {
           const Divider(),
           ListTile(
             leading: isDownloading == true ? SizedBox(height: 15.sp, width: 15.sp, child: CircularProgressIndicator(color: primaryColor, strokeWidth: 2,)) :  const Icon(Icons.download, color: primaryColor),
-            title: const Text('Download', style: TextStyle(fontSize: 18)),
+            title: const Text('Restore', style: TextStyle(fontSize: 18)),
             onTap: () {
               _downloadAndRestoreDatabase();
             },

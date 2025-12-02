@@ -50,7 +50,7 @@ class _MenuRateManagementPageState extends State<MenuRateManagementPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Type Name (e.g., Deluxe)')),
-            TextField(controller: priceController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Price per Night (\$)')),
+            TextField(controller: priceController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Price per Night (Rs)')),
           ],
         ),
         actions: [
@@ -95,7 +95,7 @@ class _MenuRateManagementPageState extends State<MenuRateManagementPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Item Name')),
-            TextField(controller: priceController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Price (\$)')),
+            TextField(controller: priceController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Price (Rs)')),
           ],
         ),
         actions: [
@@ -175,7 +175,7 @@ class _MenuRateManagementPageState extends State<MenuRateManagementPage> {
                       child: ListTile(
                         leading: const Icon(Icons.bed, color: primaryColor),
                         title: Text(type['name']),
-                        subtitle: Text('Rate: \$${type['price'].toStringAsFixed(2)} per night'),
+                        subtitle: Text('Rate: Rs. ${type['price'].toStringAsFixed(2)} per night'),
                         trailing: const Icon(Icons.edit, color: Colors.blue),
                         onTap: () => _showRoomTypeDialog(type: type), // Tap to edit
                       ),
@@ -210,7 +210,7 @@ class _MenuRateManagementPageState extends State<MenuRateManagementPage> {
                         elevation: 1,
                         child: ListTile(
                           title: Text(item['name']),
-                          subtitle: Text('Price: \$${item['price'].toStringAsFixed(2)}'),
+                          subtitle: Text('Price: Rs. ${item['price'].toStringAsFixed(2)}'),
                           trailing: const Icon(Icons.edit, color: Colors.blue),
                           onTap: () => _showFoodItemDialog(item: item), // Tap to edit
                         ),

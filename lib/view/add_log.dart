@@ -400,7 +400,7 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
             items: _roomTypes.map((room) {
               return DropdownMenuItem<int>(
                 value: room['id'] as int, // Use ID as the value
-                child: Text('${room['name']} (\$${room['price'].toStringAsFixed(2)}/night)'),
+                child: Text('${room['name']} (Rs.${room['price'].toStringAsFixed(2)}/night)'),
               );
             }).toList(),
             onChanged: (int? newId) { // Receive the ID
