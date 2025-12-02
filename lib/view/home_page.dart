@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:homestay/view/log_detail_page.dart';
 import 'package:homestay/view/settings_page.dart';
 import 'package:intl/intl.dart';
 import 'package:homestay/view/add_log.dart';
@@ -101,7 +102,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _goToAdd() async {
     await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const AddLogPage()),
+      MaterialPageRoute(builder: (_) => const UpsertLogPage()),
     );
     _fetchLogs();
   }
@@ -338,8 +339,13 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
       child: ListTile(
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => LogDetailPage(logId: item['id'] as int, onLogUpdated: _fetchLogs),
+          ),
+        ),
         contentPadding: const EdgeInsets.all(12),
-        leading: _buildProfileImage(item['citizenImageLocalPath']),
+        leading: _buildProfileImage(item['citizenImageBlob']),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

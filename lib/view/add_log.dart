@@ -1,68 +1,129 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import '../database/database_helper.dart';
+import '../database/database_helper.dart'; // Ensure correct path
 import 'package:intl/intl.dart';
 
-class AddLogPage extends StatefulWidget {
-  const AddLogPage({super.key});
-
-  @override
-  State<AddLogPage> createState() => _AddLogPageState();
+// --- Utility Functions (Ensure these are defined somewhere accessible) ---
+// Note: This helper is repeated here for completeness, but should ideally be
+// in a separate utils file or the DatabaseHelper itself.
+String _timeOfDayToString(TimeOfDay t) {
+  final now = DateTime.now();
+  final dt = DateTime(now.year, now.month, now.day, t.hour, t.minute);
+  // Using 'HH:mm' for database storage is often better, but keeping 'jm' for display consistency
+  return DateFormat.jm().format(dt); 
 }
 
-class _AddLogPageState extends State<AddLogPage> {
-  // Use the same modern color scheme
-  static const Color primaryColor = Color(0xFF4A148C); // Deep Purple 
-  static const Color backgroundColor = Color(0xFFF0F4F8); // Off-white/light gray
+TimeOfDay _stringToTimeOfDay(String timeString) {
+  try {
+    // Attempt to parse various formats (assuming it might come from DB or input)
+    final format = DateFormat.jm(); 
+    final dt = format.parse(timeString);
+    return TimeOfDay.fromDateTime(dt);
+  } catch (_) {
+    // Fallback if parsing fails (e.g., if DB stores "HH:mm")
+    final parts = timeString.split(':');
+    if (parts.length == 2) {
+      return TimeOfDay(hour: int.tryParse(parts[0]) ?? 0, minute: int.tryParse(parts[1]) ?? 0);
+    }
+    return TimeOfDay.now();
+  }
+}
+// ---------------------------------------------------------------------
+
+class UpsertLogPage extends StatefulWidget {
+  // Use optional parameters for editing
+  final int? logId;
+  final Map<String, dynamic>? initialData;
+
+  const UpsertLogPage({
+    super.key,
+    this.logId,
+    this.initialData,
+  });
+
+  @override
+  State<UpsertLogPage> createState() => _UpsertLogPageState();
+}
+
+class _UpsertLogPageState extends State<UpsertLogPage> {
+  static const Color primaryColor = Color(0xFF4A148C);
+  static const Color backgroundColor = Color(0xFFF0F4F8);
 
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _picker = ImagePicker();
 
-  // controllers
-  final TextEditingController _name = TextEditingController();
-  final TextEditingController _address = TextEditingController();
+  // Controllers (now late and initialized in initState)
+  late final TextEditingController _name;
+  late final TextEditingController _address;
+  late final TextEditingController _citizenNumber;
+  late final TextEditingController _occupation;
+  late final TextEditingController _numberOfGuests;
+  late final TextEditingController _relationWithPartner;
+  late final TextEditingController _reasonOfStay;
+  late final TextEditingController _contactNumber;
+  late final TextEditingController _roomNumber;
+  
+  // Date/Time variables
   DateTime? _arrivalDate;
   TimeOfDay? _checkInTime;
-  final TextEditingController _citizenNumber = TextEditingController();
-  final TextEditingController _occupation = TextEditingController();
-  final TextEditingController _numberOfGuests = TextEditingController();
-  final TextEditingController _relationWithPartner = TextEditingController();
-  final TextEditingController _reasonOfStay = TextEditingController();
-  final TextEditingController _contactNumber = TextEditingController();
-  final TextEditingController _roomNumber = TextEditingController();
   DateTime? _checkOutDate;
-  TimeOfDay _checkOutTime = const TimeOfDay(hour: 12, minute: 0); // default 12:00 PM
+  TimeOfDay? _checkOutTime; // Now nullable, default value set in initState
 
   Uint8List? _citizenImageBytes;
   bool _saving = false;
 
+  bool get isEditing => widget.logId != null;
+
   @override
   void initState() {
     super.initState();
-    // Pre-populate sensible defaults
-    _arrivalDate = DateTime.now();
-    _checkInTime = TimeOfDay.now();
-    _checkOutDate = DateTime.now().add(const Duration(days: 1));
+    final data = widget.initialData;
+
+    // --- Controller Initialization ---
+    _name = TextEditingController(text: data?['name'] ?? '');
+    _address = TextEditingController(text: data?['address'] ?? '');
+    _citizenNumber = TextEditingController(text: data?['citizenNumber'] ?? '');
+    _occupation = TextEditingController(text: data?['occupation'] ?? '');
+    _numberOfGuests = TextEditingController(text: data?['numberOfGuests']?.toString() ?? '');
+    _relationWithPartner = TextEditingController(text: data?['relationWithPartner'] ?? '');
+    _reasonOfStay = TextEditingController(text: data?['reasonOfStay'] ?? '');
+    _contactNumber = TextEditingController(text: data?['contactNumber'] ?? '');
+    _roomNumber = TextEditingController(text: data?['roomNumber'] ?? '');
+
+    // --- Date/Time Initialization ---
+    if (isEditing && data != null) {
+      // Load existing data for editing
+      _arrivalDate = DateTime.tryParse(data['arrivalDate'] ?? '') ?? DateTime.now();
+      _checkInTime = _stringToTimeOfDay(data['checkInTime'] ?? '12:00 PM');
+      _checkOutDate = DateTime.tryParse(data['checkOutDate'] ?? '') ?? DateTime.now().add(const Duration(days: 1));
+      _checkOutTime = _stringToTimeOfDay(data['checkOutTime'] ?? '12:00 PM');
+      _citizenImageBytes = data['citizenImageBlob'] as Uint8List?;
+    } else {
+      // Set sensible defaults for new log
+      _arrivalDate = DateTime.now();
+      _checkInTime = TimeOfDay.now();
+      _checkOutDate = DateTime.now().add(const Duration(days: 1));
+      _checkOutTime = const TimeOfDay(hour: 12, minute: 0);
+    }
   }
 
   // --- Image Handling ---
-Future<void> _pickImage() async {
-  final XFile? picked = await _picker.pickImage(
-    source: ImageSource.gallery,
-    imageQuality: 80,
-  );
+  Future<void> _pickImage() async {
+    final XFile? picked = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
 
-  if (picked != null) {
-    final bytes = await picked.readAsBytes();  // ← BLOB bytes
-    setState(() {
-      _citizenImageBytes = bytes;
-    });
+    if (picked != null) {
+      final bytes = await picked.readAsBytes();
+      setState(() {
+        _citizenImageBytes = bytes;
+      });
+    }
   }
-}
 
-
-  // --- Date & Time Pickers ---
+  // --- Date & Time Pickers (Logic remains mostly the same) ---
   Future<void> _pickArrivalDate() async {
     final now = DateTime.now();
     final r = await showDatePicker(
@@ -70,12 +131,7 @@ Future<void> _pickImage() async {
       initialDate: _arrivalDate ?? now,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
-      builder: (context, child) => Theme(
-        data: ThemeData(
-          colorScheme: ColorScheme.light(primary: primaryColor),
-        ),
-        child: child!,
-      ),
+      builder: (context, child) => Theme(data: ThemeData(colorScheme: ColorScheme.light(primary: primaryColor)), child: child!),
     );
     if (r != null) setState(() => _arrivalDate = r);
   }
@@ -84,12 +140,7 @@ Future<void> _pickImage() async {
     final t = await showTimePicker(
       context: context,
       initialTime: _checkInTime ?? TimeOfDay.now(),
-      builder: (context, child) => Theme(
-        data: ThemeData(
-          colorScheme: ColorScheme.light(primary: primaryColor),
-        ),
-        child: child!,
-      ),
+      builder: (context, child) => Theme(data: ThemeData(colorScheme: ColorScheme.light(primary: primaryColor)), child: child!),
     );
     if (t != null) setState(() => _checkInTime = t);
   }
@@ -101,12 +152,7 @@ Future<void> _pickImage() async {
       initialDate: _checkOutDate ?? now.add(const Duration(days: 1)),
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
-      builder: (context, child) => Theme(
-        data: ThemeData(
-          colorScheme: ColorScheme.light(primary: primaryColor),
-        ),
-        child: child!,
-      ),
+      builder: (context, child) => Theme(data: ThemeData(colorScheme: ColorScheme.light(primary: primaryColor)), child: child!),
     );
     if (r != null) setState(() => _checkOutDate = r);
   }
@@ -114,44 +160,29 @@ Future<void> _pickImage() async {
   Future<void> _pickCheckOutTime() async {
     final t = await showTimePicker(
       context: context,
-      initialTime: _checkOutTime,
-      builder: (context, child) => Theme(
-        data: ThemeData(
-          colorScheme: ColorScheme.light(primary: primaryColor),
-        ),
-        child: child!,
-      ),
+      initialTime: _checkOutTime ?? const TimeOfDay(hour: 12, minute: 0),
+      builder: (context, child) => Theme(data: ThemeData(colorScheme: ColorScheme.light(primary: primaryColor)), child: child!),
     );
     if (t != null) setState(() => _checkOutTime = t);
   }
 
-  // --- Utility ---
-  String _timeOfDayToString(TimeOfDay t) {
-    final now = DateTime.now();
-    final dt = DateTime(now.year, now.month, now.day, t.hour, t.minute);
-    return DateFormat.jm().format(dt);
-  }
-
-  // --- Save Logic ---
-  Future<void> _save() async {
-    // 1. Validation checks remain the same
+  // --- Save/Update Logic ---
+  Future<void> _handleUpsert() async {
     if (!_formKey.currentState!.validate()) return;
     if (_arrivalDate == null || _checkInTime == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please select both Arrival Date and Check-in Time.')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select Arrival Date and Check-in Time.')));
       }
       return;
     }
 
-    // 2. Start loading state
     setState(() => _saving = true);
 
-    // 3. Prepare data variables
-    final createdAt = DateTime.now().toIso8601String();
+    // 1. Prepare data variables
+    final String checkOutDateStr = _checkOutDate?.toIso8601String().substring(0, 10) ?? '';
+    final String checkOutTimeStr = _checkOutTime != null ? _timeOfDayToString(_checkOutTime!) : '';
 
-    // 4. Construct the data map, excluding the driveLink variable and any related logic
+    // 2. Construct the data map
     final data = {
       'name': _name.text.trim(),
       'address': _address.text.trim(),
@@ -164,28 +195,38 @@ Future<void> _pickImage() async {
       'reasonOfStay': _reasonOfStay.text.trim(),
       'contactNumber': _contactNumber.text.trim(),
       'roomNumber': _roomNumber.text.trim(),
-      'checkOutDate': _checkOutDate?.toIso8601String().substring(0, 10) ?? '',
-      'checkOutTime': _timeOfDayToString(_checkOutTime),
-      'citizenImageLocalPath': _citizenImageBytes,
-      'citizenImageDriveLink': '', 
-      'createdAt': createdAt,
+      'checkOutDate': checkOutDateStr,
+      'checkOutTime': checkOutTimeStr,
+      'citizenImageBlob': _citizenImageBytes, // Use the BLOB bytes
+      'citizenImageDriveLink': widget.initialData?['citizenImageDriveLink'] ?? '', // Preserve existing link or default to empty
     };
 
-    // 5. Insert into the local database
+    // 3. Insert or Update
     try {
-      await DatabaseHelper.instance.insertLog(data);
+      if (isEditing) {
+        await DatabaseHelper.instance.updateLog(widget.logId!, data);
+      } else {
+        // Only set createdAt for new records
+        data['createdAt'] = DateTime.now().toIso8601String();
+        await DatabaseHelper.instance.insertLog(data);
+      }
+      
+      // Signal success and pop
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+           SnackBar(content: Text('Log ${isEditing ? 'updated' : 'saved'} successfully!')),
+        );
+        Navigator.of(context).pop(true); // Return true to signal success/refresh needed
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to save log. Check console for details.')),
+          SnackBar(content: Text('Failed to ${isEditing ? 'update' : 'save'} log: $e')),
         );
       }
     }
 
-
-    // 6. Stop loading state and navigate back
     setState(() => _saving = false);
-    if (mounted) Navigator.of(context).pop();
   }
 
   @override
@@ -202,7 +243,7 @@ Future<void> _pickImage() async {
     super.dispose();
   }
 
-  // --- Custom Widgets for Modern UI ---
+  // --- Custom Widgets (unchanged) ---
 
   Widget _buildTextField(TextEditingController c, String label, {TextInputType? keyboardType, String? Function(String?)? validator, IconData? icon}) {
     return Padding(
@@ -212,11 +253,8 @@ Future<void> _pickImage() async {
         keyboardType: keyboardType,
         decoration: InputDecoration(
           labelText: label,
-          prefixIcon: icon != null ? Icon(icon, color: primaryColor.withValues(alpha:0.7)) : null,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
+          prefixIcon: icon != null ? Icon(icon, color: primaryColor.withValues(alpha: 0.7)) : null,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
           filled: true,
           fillColor: Colors.white,
           contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
@@ -241,26 +279,15 @@ Future<void> _pickImage() async {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: primaryColor.withValues(alpha:0.2), width: 1.5),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withValues(alpha:0.05),
-                spreadRadius: 1,
-                blurRadius: 3,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            border: Border.all(color: primaryColor.withValues(alpha: 0.2), width: 1.5),
+            boxShadow: [BoxShadow(color: Colors.grey.withValues(alpha: 0.05), spreadRadius: 1, blurRadius: 3, offset: const Offset(0, 2))],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 label,
-                style: TextStyle(
-                  color: primaryColor.withValues(alpha:0.8),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(color: primaryColor.withValues(alpha: 0.8), fontSize: 12, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 4),
               Row(
@@ -270,11 +297,7 @@ Future<void> _pickImage() async {
                   Expanded(
                     child: Text(
                       valueText,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black87),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -300,11 +323,7 @@ Future<void> _pickImage() async {
           children: [
             Text(
               title,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: primaryColor,
-              ),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: primaryColor),
             ),
             const Divider(color: primaryColor, thickness: 1, height: 20),
             ...children,
@@ -319,9 +338,9 @@ Future<void> _pickImage() async {
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: const Text(
-          'Add New Homestay Log',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        title: Text(
+          isEditing ? 'Edit Log (ID: ${widget.logId})' : 'Add New Homestay Log',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         backgroundColor: primaryColor,
         elevation: 0,
@@ -337,30 +356,10 @@ Future<void> _pickImage() async {
               _buildSectionCard(
                 title: 'Guest Identity',
                 children: [
-                  _buildTextField(
-                    _name,
-                    'Full Name',
-                    icon: Icons.person,
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Name is required' : null,
-                  ),
-                  _buildTextField(
-                    _address,
-                    'Permanent Address',
-                    icon: Icons.location_on,
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Address is required' : null,
-                  ),
-                  _buildTextField(
-                    _citizenNumber,
-                    'ID/Citizen Number',
-                    icon: Icons.badge,
-                    keyboardType: TextInputType.text,
-                  ),
-                  _buildTextField(
-                    _contactNumber,
-                    'Contact Number',
-                    icon: Icons.phone,
-                    keyboardType: TextInputType.phone,
-                  ),
+                  _buildTextField(_name, 'Full Name', icon: Icons.person, validator: (v) => (v == null || v.trim().isEmpty) ? 'Name is required' : null),
+                  _buildTextField(_address, 'Permanent Address', icon: Icons.location_on, validator: (v) => (v == null || v.trim().isEmpty) ? 'Address is required' : null),
+                  _buildTextField(_citizenNumber, 'ID/Citizen Number', icon: Icons.badge, keyboardType: TextInputType.text),
+                  _buildTextField(_contactNumber, 'Contact Number', icon: Icons.phone, keyboardType: TextInputType.phone),
                 ],
               ),
 
@@ -370,50 +369,21 @@ Future<void> _pickImage() async {
                 children: [
                   Row(
                     children: [
-                      _buildDateTimeButton(
-                        'Arrival Date',
-                        Icons.calendar_today,
-                        _arrivalDate == null ? 'Select Date' : DateFormat.yMd().format(_arrivalDate!),
-                        _pickArrivalDate,
-                      ),
+                      _buildDateTimeButton('Arrival Date', Icons.calendar_today, _arrivalDate == null ? 'Select Date' : DateFormat.yMd().format(_arrivalDate!), _pickArrivalDate),
                       const SizedBox(width: 10),
-                      _buildDateTimeButton(
-                        'Check-in Time',
-                        Icons.access_time,
-                        _checkInTime == null ? 'Select Time' : _timeOfDayToString(_checkInTime!),
-                        _pickCheckInTime,
-                      ),
+                      _buildDateTimeButton('Check-in Time', Icons.access_time, _checkInTime == null ? 'Select Time' : _timeOfDayToString(_checkInTime!), _pickCheckInTime),
                     ],
                   ),
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      _buildDateTimeButton(
-                        'Checkout Date',
-                        Icons.calendar_today_outlined,
-                        _checkOutDate == null ? 'Select Date' : DateFormat.yMd().format(_checkOutDate!),
-                        _pickCheckOutDate,
-                      ),
+                      _buildDateTimeButton('Checkout Date', Icons.calendar_today_outlined, _checkOutDate == null ? 'Select Date' : DateFormat.yMd().format(_checkOutDate!), _pickCheckOutDate),
                       const SizedBox(width: 10),
-                      _buildDateTimeButton(
-                        'Checkout Time',
-                        Icons.access_time_outlined,
-                        _timeOfDayToString(_checkOutTime),
-                        _pickCheckOutTime,
-                      ),
+                      _buildDateTimeButton('Checkout Time', Icons.access_time_outlined, _checkOutTime == null ? 'Select Time' : _timeOfDayToString(_checkOutTime!), _pickCheckOutTime),
                     ],
                   ),
-                  _buildTextField(
-                    _roomNumber,
-                    'Room Number / Unit',
-                    icon: Icons.meeting_room,
-                  ),
-                  _buildTextField(
-                    _numberOfGuests,
-                    'Number of Guests',
-                    icon: Icons.people,
-                    keyboardType: TextInputType.number,
-                  ),
+                  _buildTextField(_roomNumber, 'Room Number / Unit', icon: Icons.meeting_room),
+                  _buildTextField(_numberOfGuests, 'Number of Guests', icon: Icons.people, keyboardType: TextInputType.number),
                 ],
               ),
 
@@ -426,7 +396,6 @@ Future<void> _pickImage() async {
                   _buildTextField(_relationWithPartner, 'Relation with Partner', icon: Icons.people_alt_outlined),
                 ],
               ),
-
 
               // --- Image Upload Section ---
               _buildSectionCard(
@@ -446,16 +415,11 @@ Future<void> _pickImage() async {
                         ),
                         TextButton(
                           onPressed: () => setState(() => _citizenImageBytes = null),
-                          child: const Text(
-                            'Remove Photo',
-                            style: TextStyle(color: Colors.red),
-                          ),
+                          child: const Text('Remove Photo', style: TextStyle(color: Colors.red)),
                         ),
                       ],
                     ),
-
                   SizedBox(height: _citizenImageBytes != null ? 8 : 0),
-
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
@@ -474,14 +438,13 @@ Future<void> _pickImage() async {
                 ],
               ),
 
-
               const SizedBox(height: 10),
 
-              // --- Save Button ---
+              // --- Save/Update Button ---
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _saving ? null : _save,
+                  onPressed: _saving ? null : _handleUpsert,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryColor,
                     foregroundColor: Colors.white,
@@ -495,9 +458,9 @@ Future<void> _pickImage() async {
                           height: 20,
                           child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
                         )
-                      : const Text(
-                          'Save Guest Log',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      : Text(
+                          isEditing ? 'Update Guest Log' : 'Save New Guest Log',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                 ),
               ),

@@ -56,7 +56,7 @@ class DatabaseHelper {
         roomNumber TEXT,
         checkOutDate TEXT,
         checkOutTime TEXT,
-        citizenImageLocalPath TEXT,
+        citizenImageBlob TEXT,
         citizenImageDriveLink TEXT,
         createdAt TEXT
       )
