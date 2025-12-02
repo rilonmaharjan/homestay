@@ -102,7 +102,6 @@ class _HomePageState extends State<HomePage> {
   }
   
   // ... (omitted _goToAdd and _deleteLog for brevity)
-
   Future<void> _goToAdd() async {
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const UpsertLogPage()),
@@ -139,7 +138,7 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
         backgroundColor: primaryColor,
-        elevation: 0, // Flat app bar for a modern look
+        elevation: 0,
       ),
       body: Stack(
         children: [
@@ -199,7 +198,7 @@ class _HomePageState extends State<HomePage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // 1. Menu/Rate Management Button
+                  // Menu/Rate Management Button
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () {
@@ -220,7 +219,7 @@ class _HomePageState extends State<HomePage> {
                   
                   const SizedBox(width: 12), // Space between buttons
             
-                  // 2. Add New Guest Log Button
+                  // Add New Guest Log Button
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: _goToAdd, // Assuming _goToAdd is your existing navigation function
@@ -244,7 +243,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   // --- Widgets for Modern UI ---
-
   Widget _buildFilterAndSearchRow() {
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -296,20 +294,19 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             ),
-            child: DropdownButtonHideUnderline( // Hide the underline
+            child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 value: filterOption,
-                // 🔑 FIX: Add the selected text here, making the icon the suffix
                 hint: Text(filterOption, style: const TextStyle(color: Colors.white)),
                 icon: const Icon(Icons.filter_list, color: Colors.white),
                 dropdownColor: cardColor,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500), // Text color of the selected item on the button
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
                 items: filterOptions.map((String value) {
                   return DropdownMenuItem<String>(
                     value: value,
                     child: Text(
                       value,
-                      style: const TextStyle(color: primaryColor), // Text color in the dropdown list
+                      style: const TextStyle(color: primaryColor), 
                     ),
                   );
                 }).toList(),
@@ -322,7 +319,6 @@ class _HomePageState extends State<HomePage> {
                   }
                 },
                 selectedItemBuilder: (BuildContext context) {
-                  // 🔑 FIX: This builder defines what appears on the button itself
                   return filterOptions.map((String value) {
                     return Align(
                       alignment: Alignment.centerLeft,
@@ -498,10 +494,10 @@ class _HomePageState extends State<HomePage> {
         if (v == 'delete') {
           _deleteLog(id);
         } else if (v == 'log_food') {
-          // 1. Call function to log food
+          // Call function to log food
           _showFoodLoggingDialog(id);
         } else if (v == 'calculate_bill') {
-          // 2. Call function to calculate bill, passing the full log data
+          // Call function to calculate bill, passing the full log data
           _showBillingDialog(id, log);
         } else if (v == 'checkout') {
           // If checkout is handled separately, keep this (but billing usually implies checkout)
@@ -509,7 +505,7 @@ class _HomePageState extends State<HomePage> {
         }
       },
       itemBuilder: (_) => [
-        // 1. Log Food/Service Option (New)
+        // Log Food/Service Option (New)
         const PopupMenuItem(
           value: 'log_food',
           child: Row(
@@ -521,7 +517,7 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         
-        // 2. Calculate Bill Option (New)
+        // Calculate Bill Option (New)
         const PopupMenuItem(
           value: 'calculate_bill',
           child: Row(
@@ -533,7 +529,7 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         
-        // 3. CHECK OUT Option (Moved lower, as billing often precedes/includes checkout)
+        // CHECK OUT Option (Moved lower, as billing often precedes/includes checkout)
         const PopupMenuItem(
           value: 'checkout',
           child: Row(
@@ -548,7 +544,7 @@ class _HomePageState extends State<HomePage> {
         // Divider
         const PopupMenuDivider(), 
 
-        // 4. DELETE Option
+        // DELETE Option
         const PopupMenuItem(
           value: 'delete',
           child: Row(
@@ -567,9 +563,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // These methods should be defined in your State class:
-
-  // Assumes FoodLoggingDialog is imported from 'package:homestay/widgets/food_logging_dialog.dart'
   void _showFoodLoggingDialog(int logId) {
     showDialog(
       context: context,
@@ -577,7 +570,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Assumes BillingCalculationDialog is imported from 'package:homestay/widgets/billing_calculation_dialog.dart'
   void _showBillingDialog(int logId, Map<String, dynamic> logData) {
     showDialog(
       context: context,
@@ -585,29 +577,25 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Helper to convert TimeOfDay to a simple string (e.g., "14:30")
   String _timeOfDayToString(TimeOfDay t) {
     final now = DateTime.now();
     final dt = DateTime(now.year, now.month, now.day, t.hour, t.minute);
     return DateFormat.jm().format(dt);
   }
 
-  // In your StatefulWidget class (e.g., the Home Page)
   TimeOfDay _stringToTimeOfDay(String timeString) {
     try {
-      // Assuming timeString is in "HH:mm" format (e.g., "14:30")
       final parts = timeString.split(':');
       final hour = int.tryParse(parts[0]) ?? 0;
       final minute = int.tryParse(parts[1]) ?? 0;
       return TimeOfDay(hour: hour, minute: minute);
     } catch (_) {
-      return TimeOfDay.now(); // Fallback to current time on error
+      return TimeOfDay.now(); 
     }
   }
 
-  // ----------------------------------------------------------------------
   Future<void> _showCheckOutDialog(int id) async {
-    // 1. Fetch the existing log data
+    // Fetch the existing log data
     final log = await DatabaseHelper.instance.getLogById(id);
     if (log == null) {
       // Handle case where log isn't found
@@ -627,21 +615,18 @@ class _HomePageState extends State<HomePage> {
     DateTime initialDate = DateTime.now();
     if (dbCheckOutDate != null && dbCheckOutDate.isNotEmpty) {
       try {
-        // Parse the 'YYYY-MM-DD' string from the database
         initialDate = DateTime.parse(dbCheckOutDate); 
       } catch (_) {
-        // Keep DateTime.now() if parsing fails
       }
     }
 
     TimeOfDay initialTime = TimeOfDay.now();
     if (dbCheckOutTime != null && dbCheckOutTime.isNotEmpty) {
-      // Convert the 'HH:mm' string to TimeOfDay
       initialTime = _stringToTimeOfDay(dbCheckOutTime); 
     }
 
 
-    // 2. Prompt for Date
+    // Prompt for Date
     final DateTime? selectedDate = await showDatePicker(
       // ignore: use_build_context_synchronously
       context: context,
@@ -654,7 +639,7 @@ class _HomePageState extends State<HomePage> {
 
     if (selectedDate == null) return; // User cancelled date selection
 
-    // 3. Prompt for Time
+    // Prompt for Time
     final TimeOfDay? selectedTime = await showTimePicker(
       // ignore: use_build_context_synchronously
       context: context,
@@ -665,11 +650,10 @@ class _HomePageState extends State<HomePage> {
 
     if (selectedTime == null) return; // User cancelled time selection
 
-    // 4. Perform the update
+    // Perform the update
     _performCheckOut(id, selectedDate, selectedTime);
   }
 
-  // ----------------------------------------------------------------------
   Future<void> _performCheckOut(
     int id,
     DateTime date,
@@ -680,21 +664,21 @@ class _HomePageState extends State<HomePage> {
     final checkOutTimeString = _timeOfDayToString(time);
 
     try {
-      // 1. Data to update
+      // Data to update
       final updateData = {
         'checkOutDate': checkOutDateString,
         'checkOutTime': checkOutTimeString,
       };
 
-      // 2. Call the new update method in your DatabaseHelper
+      // Call the new update method in your DatabaseHelper
       await DatabaseHelper.instance.updateLog(id, updateData);
 
-      // 3. Refresh the log list in the UI
+      // Refresh the log list in the UI
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Log successfully checked out.')),
         );
-        _fetchLogs(); // Refresh your list of logs
+        _fetchLogs();
       }
     } catch (e) {
       if (mounted) {

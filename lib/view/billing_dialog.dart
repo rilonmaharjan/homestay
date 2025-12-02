@@ -32,13 +32,13 @@ class _BillingCalculationDialogState extends State<BillingCalculationDialog> {
 
   // --- CORRECTED DATA LOADING LOGIC ---
   Future<void> _loadBillingData() async {
-    // 1. Fetch Guest Consumption
+    // Fetch Guest Consumption
     final consumption = await DatabaseHelper.instance.getGuestConsumptionByLogId(widget.logId);
     
-    // 2. Fetch all Room Types
+    // Fetch all Room Types
     final roomTypes = await DatabaseHelper.instance.getAllRoomTypes();
 
-    // 3. Find the specific rate for the room assigned to this log
+    // Find the specific rate for the room assigned to this log
     double rate = 1500.0; // Default fallback rate (in case of missing data)
 
     final String assignedRoomName = widget.logData['roomNumber'];
@@ -47,7 +47,6 @@ class _BillingCalculationDialogState extends State<BillingCalculationDialog> {
       // Search the list of all rooms for the one matching the name stored in the log
       final assignedRoom = roomTypes.firstWhere(
         (room) => room['name'] == assignedRoomName,
-        // Using null as Map<String, dynamic> to safely return null if not found
         // ignore: cast_from_null_always_fails
         orElse: () => null as Map<String, dynamic>,
       );
@@ -59,85 +58,14 @@ class _BillingCalculationDialogState extends State<BillingCalculationDialog> {
       
     } catch (e) {
       debugPrint('Error finding room rate for $assignedRoomName: $e');
-      // 'rate' remains the default of 1500.0 if an error occurs
     }
 
-    // 4. Update state with the correct rate
+    // Update state with the correct rate
     setState(() {
       _consumption = consumption;
       _roomRate = rate; // Uses the rate of the assigned room
       _isLoading = false;
     });
-  }
-  // ----------------------------------------
-
-  // --- Calculation Logic (Unchanged) ---
-  int _calculateNights(Map<String, dynamic> data) {
-    try {
-      final DateTime arrival = DateTime.parse(data['arrivalDate']);
-      // Use today's date/time for calculation if not explicitly checked out
-      final String checkoutDateString = data['checkOutDate']?.toString().substring(0, 10) ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
-      final DateTime checkout = DateTime.parse(checkoutDateString);
-
-      final Duration stayDuration = checkout.difference(arrival);
-      // If checkout is after arrival, duration is correct.
-      // Add 1 to include the arrival day/first night.
-      final int nights = stayDuration.inDays; 
-      
-      // Minimum 1 night
-      return nights >= 0 ? nights + 1 : 1; 
-
-    } catch (e) {
-      return 1;
-    }
-  }
-
-  double _calculateTotalRoomCost() {
-    final nights = _calculateNights(widget.logData);
-    return nights * _roomRate;
-  }
-
-  double _calculateTotalFoodCost() {
-    return _consumption.fold(0.0, (sum, item) {
-      final price = (item['pricePerUnit'] as double? ?? 0.0);
-      final quantity = (item['quantity'] as int? ?? 0);
-      return sum + (price * quantity);
-    });
-  }
-
-  double _calculateGrandTotal() {
-    final roomCost = _calculateTotalRoomCost();
-    final foodCost = _calculateTotalFoodCost();
-    return roomCost + foodCost;
-  }
-
-  // --- UI Helpers (Unchanged) ---
-
-  Widget _buildSummaryRow(String title, double amount, {bool isTotal = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontWeight: isTotal ? FontWeight.bold : FontWeight.w600,
-              fontSize: isTotal ? 18 : 16,
-              color: isTotal ? primaryColor : Colors.black87,
-            ),
-          ),
-          Text(
-            'Rs. ${amount.toStringAsFixed(2)}',
-            style: TextStyle(
-              fontWeight: isTotal ? FontWeight.bold : FontWeight.w600,
-              fontSize: isTotal ? 18 : 16,
-              color: isTotal ? primaryColor : Colors.black,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -207,6 +135,73 @@ class _BillingCalculationDialogState extends State<BillingCalculationDialog> {
           child: const Text('Finalize Payment'),
         ),
       ],
+    );
+  }
+
+    // --- Calculation Logic (Unchanged) ---
+  int _calculateNights(Map<String, dynamic> data) {
+    try {
+      final DateTime arrival = DateTime.parse(data['arrivalDate']);
+      // Use today's date/time for calculation if not explicitly checked out
+      final String checkoutDateString = data['checkOutDate']?.toString().substring(0, 10) ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final DateTime checkout = DateTime.parse(checkoutDateString);
+
+      final Duration stayDuration = checkout.difference(arrival);
+      // If checkout is after arrival, duration is correct.
+      final int nights = stayDuration.inDays; 
+      
+      // Minimum 1 night
+      return nights >= 0 ? nights + 1 : 1; 
+
+    } catch (e) {
+      return 1;
+    }
+  }
+
+  double _calculateTotalRoomCost() {
+    final nights = _calculateNights(widget.logData);
+    return nights * _roomRate;
+  }
+
+  double _calculateTotalFoodCost() {
+    return _consumption.fold(0.0, (sum, item) {
+      final price = (item['pricePerUnit'] as double? ?? 0.0);
+      final quantity = (item['quantity'] as int? ?? 0);
+      return sum + (price * quantity);
+    });
+  }
+
+  double _calculateGrandTotal() {
+    final roomCost = _calculateTotalRoomCost();
+    final foodCost = _calculateTotalFoodCost();
+    return roomCost + foodCost;
+  }
+
+  // --- UI Helpers (Unchanged) ---
+  Widget _buildSummaryRow(String title, double amount, {bool isTotal = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.w600,
+              fontSize: isTotal ? 18 : 16,
+              color: isTotal ? primaryColor : Colors.black87,
+            ),
+          ),
+          Text(
+            'Rs. ${amount.toStringAsFixed(2)}',
+            style: TextStyle(
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.w600,
+              fontSize: isTotal ? 18 : 16,
+              color: isTotal ? primaryColor : Colors.black,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

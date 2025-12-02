@@ -1,5 +1,3 @@
-// lib/widgets/food_logging_dialog.dart
-
 import 'package:flutter/material.dart';
 import '../database/database_helper.dart'; 
 
@@ -15,7 +13,7 @@ class FoodLoggingDialog extends StatefulWidget {
 class _FoodLoggingDialogState extends State<FoodLoggingDialog> {
   static const Color primaryColor = Color(0xFF4A148C);
   List<Map<String, dynamic>> _foodMenu = [];
-  Map<int, int> _quantities = {}; // Stores {foodItemId: quantity}
+  Map<int, int> _quantities = {}; 
   bool _isLoading = true;
   bool _isSaving = false;
 

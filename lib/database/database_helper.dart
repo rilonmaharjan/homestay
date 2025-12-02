@@ -3,17 +3,10 @@ import 'package:sqflite/sqflite.dart';
 // ignore: depend_on_referenced_packages
 import 'package:path/path.dart';
 import 'dart:io';
-// Package needed for GoogleSignIn class (The fix)
 import 'package:google_sign_in/google_sign_in.dart'; 
-// Use the standard http package for the base client
 import 'package:http/http.dart' as http; 
-// Package for interacting with Google Drive
 import 'package:googleapis/drive/v3.dart' as drive; 
-// Your custom client
 import 'package:homestay/helper/google_client.dart'; 
-// Ensure 'google_client.dart' contains the 'GoogleHttpClient' class.
-
-
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
   static Database? _database;
@@ -45,6 +38,7 @@ class DatabaseHelper {
   }
 
   Future<void> _onCreate(Database db, int version) async {
+    //Main table
     await db.execute('''
       CREATE TABLE homestay (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,7 +61,7 @@ class DatabaseHelper {
       )
     ''');
 
-    // 1. New Table for Food Items (Menu)
+    // Table for Food Items (Menu)
     await db.execute('''
       CREATE TABLE food_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -77,7 +71,7 @@ class DatabaseHelper {
       )
     ''');
 
-    // 2. New Table for Guest Food Consumption (Billing)
+    // Table for Guest Food Consumption (Billing)
     await db.execute('''
       CREATE TABLE guest_food_consumption (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,6 +84,7 @@ class DatabaseHelper {
       )
     ''');
 
+    // Table for Guest Consumption (JOIN table)
     await db.execute('''
     CREATE TABLE $_guestConsumptionTable (
       id INTEGER PRIMARY KEY,
@@ -102,7 +97,7 @@ class DatabaseHelper {
     )
   ''');
 
-    // 3. New Table for Room Rates (Single global rate)
+    // Table for Room Rates (Single global rate)
     await db.execute('''
       CREATE TABLE room_types (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,20 +107,24 @@ class DatabaseHelper {
       )
     ''');
 
+    // Insert default room types
     await db.insert('room_types', {'name': 'Standard Single', 'price': 1000.0, 'description': 'Basic single occupancy room'}); 
     await db.insert('room_types', {'name': 'Double Deluxe', 'price': 2000.0, 'description': 'Premium room with double bed'});
   }
 
+  // Log Entry Methods
   Future<int> insertLog(Map<String, dynamic> row) async {
     final db = await database;
     return await db.insert('homestay', row);
   }
 
+  // Fetch all logs
   Future<List<Map<String, dynamic>>> getAllLogs() async {
     final db = await database;
     return await db.query('homestay', orderBy: 'id DESC');
   }
 
+  // Update a log entry
   Future<int> updateLog(int id, Map<String, dynamic> row) async {
     final db = await database;
     return await db.update(
@@ -136,8 +135,7 @@ class DatabaseHelper {
     );
   }
 
-  // In DatabaseHelper.dart
-
+  // Fetch a single log by ID
   Future<Map<String, dynamic>?> getLogById(int id) async {
     final db = await database;
     final result = await db.query(
@@ -152,6 +150,7 @@ class DatabaseHelper {
     return null;
   }
 
+  // Delete a log entry
   Future<int> deleteLog(int id) async {
     final db = await database;
     return await db.delete('homestay', where: 'id = ?', whereArgs: [id]);
@@ -253,7 +252,7 @@ class DatabaseHelper {
     return fileList.files?.isNotEmpty == true ? fileList.files!.first : null;
   }
 
-  /// Downloads the latest database backup from Google Drive and saves it locally.
+  // Downloads the latest database backup from Google Drive and saves it locally.
   Future<bool> downloadDatabaseFromDrive() async {
     final httpClient = await _getAuthenticatedHttpClient();
     if (httpClient == null) return false;
@@ -410,6 +409,7 @@ class DatabaseHelper {
       return result.isNotEmpty ? result.first : null;
   }
 
+  // Bulk insert guest consumption records
   Future<int> bulkInsertGuestConsumption(List<Map<String, dynamic>> consumptionList) async {
     final db = await database;
     int insertedCount = 0;
@@ -417,7 +417,6 @@ class DatabaseHelper {
     // Use a transaction for fast, atomic insertion of multiple rows
     await db.transaction((txn) async {
       for (var row in consumptionList) {
-        // Ensure row contains only valid columns for insertion
         final map = {
           _consumptionColumnLogId: row['logId'],
           _consumptionColumnFoodItemId: row['foodItemId'],
@@ -435,7 +434,6 @@ class DatabaseHelper {
       }
     });
 
-    // Return the count of successfully inserted records
     return insertedCount;
   }
 }

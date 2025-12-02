@@ -1,5 +1,3 @@
-// lib/pages/management/menu_rate_management_page.dart
-
 import 'package:flutter/material.dart';
 import '../../database/database_helper.dart'; // Adjust path as needed
 
@@ -36,6 +34,97 @@ class _MenuRateManagementPageState extends State<MenuRateManagementPage> {
     });
   }
 
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Menu & Rate Management', style: TextStyle(color: Colors.white)),
+        backgroundColor: primaryColor,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: primaryColor))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // --- Room Type Management Section ---
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Room Types & Pricing', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: primaryColor)),
+                      FloatingActionButton.small(
+                        heroTag: 'add_room_tag',
+                        onPressed: () => _showRoomTypeDialog(),
+                        backgroundColor: primaryColor,
+                        child: const Icon(Icons.add, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                  const Divider(color: primaryColor),
+                  
+                  if (_roomTypes.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16.0),
+                      child: Text('No room types defined. Tap + to add one.'),
+                    )
+                  else
+                    ..._roomTypes.map((type) => Card(
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      elevation: 1,
+                      child: ListTile(
+                        leading: const Icon(Icons.bed, color: primaryColor),
+                        title: Text(type['name']),
+                        subtitle: Text('Rate: Rs. ${type['price'].toStringAsFixed(2)} per night'),
+                        trailing: const Icon(Icons.edit, color: Colors.blue),
+                        onTap: () => _showRoomTypeDialog(type: type), // Tap to edit
+                      ),
+                    )),
+                  
+                  const SizedBox(height: 40),
+
+                  // --- Food Item Management Section ---
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Food & Service Menu', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: primaryColor)),
+                      FloatingActionButton.small(
+                        heroTag: 'add_food_tag',
+                        onPressed: () => _showFoodItemDialog(),
+                        backgroundColor: primaryColor,
+                        child: const Icon(Icons.add, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                  const Divider(color: primaryColor),
+
+                  // --- Food Items List ---
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _foodItems.length,
+                    itemBuilder: (context, index) {
+                      final item = _foodItems[index];
+                      return Card(
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        elevation: 1,
+                        child: ListTile(
+                          title: Text(item['name']),
+                          subtitle: Text('Price: Rs. ${item['price'].toStringAsFixed(2)}'),
+                          trailing: const Icon(Icons.edit, color: Colors.blue),
+                          onTap: () => _showFoodItemDialog(item: item), // Tap to edit
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  
   // --- Room Type Management Dialog ---
   Future<void> _showRoomTypeDialog({Map<String, dynamic>? type}) async {
     final isEditing = type != null;
@@ -116,11 +205,7 @@ class _MenuRateManagementPageState extends State<MenuRateManagementPage> {
         };
 
         if (isEditing) {
-          // You need to implement updateFoodItem(Map<String, dynamic> row) in your DatabaseHelper
-          // await DatabaseHelper.instance.updateFoodItem(row, item!['id']); 
-          // For simplicity here, we'll just insert/refresh
         } else {
-          // Assuming insertFoodItem(Map<String, dynamic> row) exists in your DatabaseHelper
           await DatabaseHelper.instance.insertFoodItem(row); 
         }
 
@@ -130,96 +215,5 @@ class _MenuRateManagementPageState extends State<MenuRateManagementPage> {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid input.')));
       }
     }
-  }
-
-  // --- Main Build Method ---
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Menu & Rate Management', style: TextStyle(color: Colors.white)),
-        backgroundColor: primaryColor,
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: primaryColor))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // --- 1. Room Type Management Section ---
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Room Types & Pricing', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: primaryColor)),
-                      FloatingActionButton.small(
-                        heroTag: 'add_room_tag',
-                        onPressed: () => _showRoomTypeDialog(),
-                        backgroundColor: primaryColor,
-                        child: const Icon(Icons.add, color: Colors.white),
-                      ),
-                    ],
-                  ),
-                  const Divider(color: primaryColor),
-                  
-                  if (_roomTypes.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16.0),
-                      child: Text('No room types defined. Tap + to add one.'),
-                    )
-                  else
-                    ..._roomTypes.map((type) => Card(
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      elevation: 1,
-                      child: ListTile(
-                        leading: const Icon(Icons.bed, color: primaryColor),
-                        title: Text(type['name']),
-                        subtitle: Text('Rate: Rs. ${type['price'].toStringAsFixed(2)} per night'),
-                        trailing: const Icon(Icons.edit, color: Colors.blue),
-                        onTap: () => _showRoomTypeDialog(type: type), // Tap to edit
-                      ),
-                    )),
-                  
-                  const SizedBox(height: 40),
-
-                  // --- 2. Food Item Management Section ---
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Food & Service Menu', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: primaryColor)),
-                      FloatingActionButton.small(
-                        heroTag: 'add_food_tag',
-                        onPressed: () => _showFoodItemDialog(),
-                        backgroundColor: primaryColor,
-                        child: const Icon(Icons.add, color: Colors.white),
-                      ),
-                    ],
-                  ),
-                  const Divider(color: primaryColor),
-
-                  // --- Food Items List ---
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _foodItems.length,
-                    itemBuilder: (context, index) {
-                      final item = _foodItems[index];
-                      return Card(
-                        margin: const EdgeInsets.symmetric(vertical: 4),
-                        elevation: 1,
-                        child: ListTile(
-                          title: Text(item['name']),
-                          subtitle: Text('Price: Rs. ${item['price'].toStringAsFixed(2)}'),
-                          trailing: const Icon(Icons.edit, color: Colors.blue),
-                          onTap: () => _showFoodItemDialog(item: item), // Tap to edit
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-    );
   }
 }

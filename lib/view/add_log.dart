@@ -3,29 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../database/database_helper.dart'; // Ensure correct path
 import 'package:intl/intl.dart';
-
-// --- Utility Functions ---
-String _timeOfDayToString(TimeOfDay t) {
-  final now = DateTime.now();
-  final dt = DateTime(now.year, now.month, now.day, t.hour, t.minute);
-  return DateFormat.jm().format(dt); 
-}
-
-TimeOfDay _stringToTimeOfDay(String timeString) {
-  try {
-    final format = DateFormat.jm(); 
-    final dt = format.parse(timeString);
-    return TimeOfDay.fromDateTime(dt);
-  } catch (_) {
-    final parts = timeString.split(':');
-    if (parts.length == 2) {
-      return TimeOfDay(hour: int.tryParse(parts[0]) ?? 0, minute: int.tryParse(parts[1]) ?? 0);
-    }
-    return TimeOfDay.now();
-  }
-}
-// -------------------------
-
 class UpsertLogPage extends StatefulWidget {
   final int? logId;
   final Map<String, dynamic>? initialData;
@@ -61,7 +38,6 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
   List<Map<String, dynamic>> _roomTypes = [];
   int? _selectedRoomTypeId; // Store the unique ID of the selected room
   bool _isLoadingRooms = true;
-  // --------------------------------------------------------
   
   // Date/Time variables
   DateTime? _arrivalDate;
@@ -117,11 +93,10 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
       
       int? matchedId;
       
-      // 1. If editing, find the room ID based on the stored roomName
+      // If editing, find the room ID based on the stored roomName
       if (currentRoomName != null && currentRoomName.isNotEmpty) {
         final matchedRoom = rooms.firstWhere(
           (room) => room['name'] == currentRoomName,
-          // Return null as Map<String, dynamic> to satisfy orElse signature
           // ignore: cast_from_null_always_fails
           orElse: () => null as Map<String, dynamic>, 
         );
@@ -130,7 +105,7 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
       
       _selectedRoomTypeId = matchedId;
       
-      // 2. If adding (and no pre-selection found), default to the first room ID if available
+      // If adding (and no pre-selection found), default to the first room ID if available
       if (_selectedRoomTypeId == null && _roomTypes.isNotEmpty && !isEditing) {
         _selectedRoomTypeId = _roomTypes.first['id'] as int;
       }
@@ -286,7 +261,6 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
   }
 
   // --- Custom Widgets (unchanged) ---
-
   Widget _buildTextField(TextEditingController c, String label, {TextInputType? keyboardType, String? Function(String?)? validator, IconData? icon}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -413,7 +387,6 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
       ),
     );
   }
-  // ---------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -552,5 +525,25 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
         ),
       ),
     );
+  }
+}
+
+String _timeOfDayToString(TimeOfDay t) {
+  final now = DateTime.now();
+  final dt = DateTime(now.year, now.month, now.day, t.hour, t.minute);
+  return DateFormat.jm().format(dt); 
+}
+
+TimeOfDay _stringToTimeOfDay(String timeString) {
+  try {
+    final format = DateFormat.jm(); 
+    final dt = format.parse(timeString);
+    return TimeOfDay.fromDateTime(dt);
+  } catch (_) {
+    final parts = timeString.split(':');
+    if (parts.length == 2) {
+      return TimeOfDay(hour: int.tryParse(parts[0]) ?? 0, minute: int.tryParse(parts[1]) ?? 0);
+    }
+    return TimeOfDay.now();
   }
 }
