@@ -97,7 +97,7 @@ class _LogDetailPageState extends State<LogDetailPage> {
         children: [
           Row(
             children: [
-              if (icon != null) Icon(icon, size: 18, color: primaryColor.withOpacity(0.7)),
+              if (icon != null) Icon(icon, size: 18, color: primaryColor.withValues(alpha: 0.7)),
               const SizedBox(width: 8),
               Text(
                 title,

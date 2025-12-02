@@ -61,6 +61,42 @@ class DatabaseHelper {
         createdAt TEXT
       )
     ''');
+
+    // 1. New Table for Food Items (Menu)
+    await db.execute('''
+      CREATE TABLE food_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        price REAL NOT NULL, -- Fixed rate for the item
+        isAvailable INTEGER NOT NULL 
+      )
+    ''');
+
+    // 2. New Table for Guest Food Consumption (Billing)
+    await db.execute('''
+      CREATE TABLE guest_food_consumption (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        logId INTEGER NOT NULL,
+        foodItemId INTEGER NOT NULL,
+        quantity INTEGER NOT NULL,
+        pricePerUnit REAL NOT NULL, 
+        FOREIGN KEY (logId) REFERENCES homestay(id) ON DELETE CASCADE,
+        FOREIGN KEY (foodItemId) REFERENCES food_items(id)
+      )
+    ''');
+
+    // 3. New Table for Room Rates (Single global rate)
+    await db.execute('''
+      CREATE TABLE room_types (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        price REAL NOT NULL, -- Price per night for this room type
+        description TEXT
+      )
+    ''');
+
+    await db.insert('room_types', {'name': 'Standard Single', 'price': 40.0, 'description': 'Basic single occupancy room'}); 
+    await db.insert('room_types', {'name': 'Double Deluxe', 'price': 75.0, 'description': 'Premium room with double bed'});
   }
 
   Future<int> insertLog(Map<String, dynamic> row) async {
@@ -159,15 +195,19 @@ class DatabaseHelper {
 
       // 2. Prepare the file metadata
       final fileMetadata = drive.File();
-      fileMetadata.name = 'homestay_backup_${DateTime.now().toIso8601String().substring(0, 10)}.db';
-      fileMetadata.mimeType = 'application/x-sqlite3'; // Standard SQLite MIME type
+      // Use a clearer naming convention to easily identify backups
+      fileMetadata.name = 'Homestay_Backup_${DateTime.now().toIso8601String().substring(0, 16)}.db'; 
+      fileMetadata.mimeType = 'application/x-sqlite3'; 
 
+      // Optional: Search for existing files with the base name and update, 
+      // instead of creating new ones, to prevent clutter.
+      
       // 3. Upload the file
       final response = await driveApi.files.create(
         fileMetadata,
         uploadMedia: drive.Media(
-          dbFile.openRead(), // Stream the file content
-          dbFile.lengthSync(), // File size
+          dbFile.openRead(),
+          dbFile.lengthSync(),
         ),
       );
 
@@ -210,13 +250,16 @@ class DatabaseHelper {
         return false;
       }
 
+      // CRITICAL STEP: Close the existing connection to the old database file
+      // before overwriting it with the new one.
+      await closeDatabase(); 
+
       // 1. Get the local path where the file must be saved
       final dbPath = await getDatabasesPath();
       final path = join(dbPath, 'homestay.db');
       final dbFile = File(path);
 
       // 2. Download the file content
-      // Use the download request and cast the response to Media (Stream<List<int>>)
       final drive.Media downloadedMedia = await driveApi.files.get(
         latestFile.id!,
         downloadOptions: drive.DownloadOptions.fullMedia,
@@ -228,6 +271,9 @@ class DatabaseHelper {
       await sink.close();
 
       debugPrint('✅ Database downloaded and saved successfully to: $path');
+      
+      // IMPORTANT: After returning true, your application (e.g., the home page) 
+      // must be instructed to reload to reconnect to the new database file.
       return true;
 
     } catch (e) {
@@ -246,7 +292,7 @@ class DatabaseHelper {
     }
   }
 
-  /// Deletes the latest database backup from Google Drive.
+  // Deletes the latest database backup from Google Drive.
   Future<bool> deleteDatabaseFromDrive() async {
     final httpClient = await _getAuthenticatedHttpClient();
     if (httpClient == null) return false;
@@ -273,5 +319,72 @@ class DatabaseHelper {
     } finally {
       httpClient.close();
     }
+  }
+
+  // Food Item Methods
+  Future<List<Map<String, dynamic>>> getAllFoodItems() async {
+      final db = await database;
+      return await db.query('food_items', orderBy: 'name ASC');
+  }
+
+  // Guest Food Consumption Methods
+  Future<int> insertGuestConsumption(Map<String, dynamic> row) async {
+      final db = await database;
+      return await db.insert('guest_food_consumption', row);
+  }
+
+  Future<List<Map<String, dynamic>>> getGuestConsumptionByLogId(int logId) async {
+      final db = await database;
+      return await db.rawQuery('''
+          SELECT 
+              gfc.*, 
+              fi.name as foodName
+          FROM 
+              guest_food_consumption gfc
+          JOIN 
+              food_items fi ON gfc.foodItemId = fi.id
+          WHERE 
+              gfc.logId = ?
+          ORDER BY gfc.id DESC
+      ''', [logId]);
+  }
+
+  // Room Rate Methods
+  Future<double> getRoomRate() async {
+      final db = await database;
+      final result = await db.query('room_rates', where: 'id = 1', limit: 1);
+      // Use 1500.0 as a hardcoded fallback if rate table is empty
+      return result.isNotEmpty ? (result.first['rate'] as double) : 1500.0; 
+  }
+
+  // New method required for adding food items
+  Future<int> insertFoodItem(Map<String, dynamic> row) async {
+      final db = await database;
+      return await db.insert('food_items', row);
+  }
+
+  // Get all defined room types (for management and selection)
+  Future<List<Map<String, dynamic>>> getAllRoomTypes() async {
+      final db = await database;
+      return await db.query('room_types', orderBy: 'name ASC');
+  }
+
+  // Add a new room type
+  Future<int> insertRoomType(Map<String, dynamic> row) async {
+      final db = await database;
+      return await db.insert('room_types', row);
+  }
+
+  // Update an existing room type
+  Future<int> updateRoomType(Map<String, dynamic> row, int id) async {
+      final db = await database;
+      return await db.update('room_types', row, where: 'id = ?', whereArgs: [id]);
+  }
+
+  // Get room type by ID (used for billing if linked)
+  Future<Map<String, dynamic>?> getRoomTypeById(int id) async {
+      final db = await database;
+      final result = await db.query('room_types', where: 'id = ?', whereArgs: [id], limit: 1);
+      return result.isNotEmpty ? result.first : null;
   }
 }

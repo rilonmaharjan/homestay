@@ -4,24 +4,19 @@ import 'package:image_picker/image_picker.dart';
 import '../database/database_helper.dart'; // Ensure correct path
 import 'package:intl/intl.dart';
 
-// --- Utility Functions (Ensure these are defined somewhere accessible) ---
-// Note: This helper is repeated here for completeness, but should ideally be
-// in a separate utils file or the DatabaseHelper itself.
+// --- Utility Functions ---
 String _timeOfDayToString(TimeOfDay t) {
   final now = DateTime.now();
   final dt = DateTime(now.year, now.month, now.day, t.hour, t.minute);
-  // Using 'HH:mm' for database storage is often better, but keeping 'jm' for display consistency
   return DateFormat.jm().format(dt); 
 }
 
 TimeOfDay _stringToTimeOfDay(String timeString) {
   try {
-    // Attempt to parse various formats (assuming it might come from DB or input)
     final format = DateFormat.jm(); 
     final dt = format.parse(timeString);
     return TimeOfDay.fromDateTime(dt);
   } catch (_) {
-    // Fallback if parsing fails (e.g., if DB stores "HH:mm")
     final parts = timeString.split(':');
     if (parts.length == 2) {
       return TimeOfDay(hour: int.tryParse(parts[0]) ?? 0, minute: int.tryParse(parts[1]) ?? 0);
@@ -29,10 +24,9 @@ TimeOfDay _stringToTimeOfDay(String timeString) {
     return TimeOfDay.now();
   }
 }
-// ---------------------------------------------------------------------
+// -------------------------
 
 class UpsertLogPage extends StatefulWidget {
-  // Use optional parameters for editing
   final int? logId;
   final Map<String, dynamic>? initialData;
 
@@ -53,7 +47,7 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _picker = ImagePicker();
 
-  // Controllers (now late and initialized in initState)
+  // Controllers
   late final TextEditingController _name;
   late final TextEditingController _address;
   late final TextEditingController _citizenNumber;
@@ -62,13 +56,18 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
   late final TextEditingController _relationWithPartner;
   late final TextEditingController _reasonOfStay;
   late final TextEditingController _contactNumber;
-  late final TextEditingController _roomNumber;
+
+  // --- ROOM SELECTION (Updated to use ID for stability) ---
+  List<Map<String, dynamic>> _roomTypes = [];
+  int? _selectedRoomTypeId; // Store the unique ID of the selected room
+  bool _isLoadingRooms = true;
+  // --------------------------------------------------------
   
   // Date/Time variables
   DateTime? _arrivalDate;
   TimeOfDay? _checkInTime;
   DateTime? _checkOutDate;
-  TimeOfDay? _checkOutTime; // Now nullable, default value set in initState
+  TimeOfDay? _checkOutTime;
 
   Uint8List? _citizenImageBytes;
   bool _saving = false;
@@ -89,18 +88,18 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
     _relationWithPartner = TextEditingController(text: data?['relationWithPartner'] ?? '');
     _reasonOfStay = TextEditingController(text: data?['reasonOfStay'] ?? '');
     _contactNumber = TextEditingController(text: data?['contactNumber'] ?? '');
-    _roomNumber = TextEditingController(text: data?['roomNumber'] ?? '');
+    
+    // Load room types and attempt to pre-select
+    _loadRoomTypes(data?['roomNumber']);
 
     // --- Date/Time Initialization ---
     if (isEditing && data != null) {
-      // Load existing data for editing
       _arrivalDate = DateTime.tryParse(data['arrivalDate'] ?? '') ?? DateTime.now();
       _checkInTime = _stringToTimeOfDay(data['checkInTime'] ?? '12:00 PM');
       _checkOutDate = DateTime.tryParse(data['checkOutDate'] ?? '') ?? DateTime.now().add(const Duration(days: 1));
       _checkOutTime = _stringToTimeOfDay(data['checkOutTime'] ?? '12:00 PM');
       _citizenImageBytes = data['citizenImageBlob'] as Uint8List?;
     } else {
-      // Set sensible defaults for new log
       _arrivalDate = DateTime.now();
       _checkInTime = TimeOfDay.now();
       _checkOutDate = DateTime.now().add(const Duration(days: 1));
@@ -108,7 +107,37 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
     }
   }
 
-  // --- Image Handling ---
+  // --- UPDATED ROOM LOADING LOGIC (Uses Room Name to find ID) ---
+  Future<void> _loadRoomTypes(String? currentRoomName) async {
+    final rooms = await DatabaseHelper.instance.getAllRoomTypes();
+    
+    setState(() {
+      _roomTypes = rooms;
+      _isLoadingRooms = false;
+      
+      int? matchedId;
+      
+      // 1. If editing, find the room ID based on the stored roomName
+      if (currentRoomName != null && currentRoomName.isNotEmpty) {
+        final matchedRoom = rooms.firstWhere(
+          (room) => room['name'] == currentRoomName,
+          // Return null as Map<String, dynamic> to satisfy orElse signature
+          // ignore: cast_from_null_always_fails
+          orElse: () => null as Map<String, dynamic>, 
+        );
+        matchedId = matchedRoom['id'] as int?;
+      }
+      
+      _selectedRoomTypeId = matchedId;
+      
+      // 2. If adding (and no pre-selection found), default to the first room ID if available
+      if (_selectedRoomTypeId == null && _roomTypes.isNotEmpty && !isEditing) {
+        _selectedRoomTypeId = _roomTypes.first['id'] as int;
+      }
+    });
+  }
+  
+  // --- Image Handling (Unchanged) ---
   Future<void> _pickImage() async {
     final XFile? picked = await _picker.pickImage(
       source: ImageSource.gallery,
@@ -123,7 +152,7 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
     }
   }
 
-  // --- Date & Time Pickers (Logic remains mostly the same) ---
+  // --- Date & Time Pickers (Unchanged) ---
   Future<void> _pickArrivalDate() async {
     final now = DateTime.now();
     final r = await showDatePicker(
@@ -131,7 +160,7 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
       initialDate: _arrivalDate ?? now,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
-      builder: (context, child) => Theme(data: ThemeData(colorScheme: ColorScheme.light(primary: primaryColor)), child: child!),
+      builder: (context, child) => Theme(data: ThemeData(colorScheme: const ColorScheme.light(primary: primaryColor)), child: child!),
     );
     if (r != null) setState(() => _arrivalDate = r);
   }
@@ -140,7 +169,7 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
     final t = await showTimePicker(
       context: context,
       initialTime: _checkInTime ?? TimeOfDay.now(),
-      builder: (context, child) => Theme(data: ThemeData(colorScheme: ColorScheme.light(primary: primaryColor)), child: child!),
+      builder: (context, child) => Theme(data: ThemeData(colorScheme: const ColorScheme.light(primary: primaryColor)), child: child!),
     );
     if (t != null) setState(() => _checkInTime = t);
   }
@@ -152,7 +181,7 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
       initialDate: _checkOutDate ?? now.add(const Duration(days: 1)),
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
-      builder: (context, child) => Theme(data: ThemeData(colorScheme: ColorScheme.light(primary: primaryColor)), child: child!),
+      builder: (context, child) => Theme(data: ThemeData(colorScheme: const ColorScheme.light(primary: primaryColor)), child: child!),
     );
     if (r != null) setState(() => _checkOutDate = r);
   }
@@ -161,14 +190,22 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
     final t = await showTimePicker(
       context: context,
       initialTime: _checkOutTime ?? const TimeOfDay(hour: 12, minute: 0),
-      builder: (context, child) => Theme(data: ThemeData(colorScheme: ColorScheme.light(primary: primaryColor)), child: child!),
+      builder: (context, child) => Theme(data: ThemeData(colorScheme: const ColorScheme.light(primary: primaryColor)), child: child!),
     );
     if (t != null) setState(() => _checkOutTime = t);
   }
 
-  // --- Save/Update Logic ---
+  // --- Save/Update Logic (Revised to find room name based on ID) ---
   Future<void> _handleUpsert() async {
     if (!_formKey.currentState!.validate()) return;
+    
+    // Validate room selection explicitly
+    if (_selectedRoomTypeId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a Room Type.')));
+      }
+      return;
+    }
     if (_arrivalDate == null || _checkInTime == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select Arrival Date and Check-in Time.')));
@@ -177,6 +214,12 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
     }
 
     setState(() => _saving = true);
+
+    // Look up the selected room object using the ID
+    final selectedRoom = _roomTypes.firstWhere(
+      (room) => room['id'] == _selectedRoomTypeId,
+      orElse: () => throw Exception("Selected Room ID not found!"),
+    );
 
     // 1. Prepare data variables
     final String checkOutDateStr = _checkOutDate?.toIso8601String().substring(0, 10) ?? '';
@@ -194,10 +237,13 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
       'relationWithPartner': _relationWithPartner.text.trim(),
       'reasonOfStay': _reasonOfStay.text.trim(),
       'contactNumber': _contactNumber.text.trim(),
-      'roomNumber': _roomNumber.text.trim(),
+      
+      // Use the name found via the selected ID
+      'roomNumber': selectedRoom['name'], 
+      
       'checkOutDate': checkOutDateStr,
       'checkOutTime': checkOutTimeStr,
-      'citizenImageBlob': _citizenImageBytes, // Use the BLOB bytes
+      'citizenImageBlob': _citizenImageBytes, 
     };
 
     // 3. Insert or Update
@@ -205,17 +251,15 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
       if (isEditing) {
         await DatabaseHelper.instance.updateLog(widget.logId!, data);
       } else {
-        // Only set createdAt for new records
         data['createdAt'] = DateTime.now().toIso8601String();
         await DatabaseHelper.instance.insertLog(data);
       }
       
-      // Signal success and pop
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(content: Text('Log ${isEditing ? 'updated' : 'saved'} successfully!')),
+            SnackBar(content: Text('Log ${isEditing ? 'updated' : 'saved'} successfully!')),
         );
-        Navigator.of(context).pop(true); // Return true to signal success/refresh needed
+        Navigator.of(context).pop(true);
       }
     } catch (e) {
       if (mounted) {
@@ -238,7 +282,6 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
     _relationWithPartner.dispose();
     _reasonOfStay.dispose();
     _contactNumber.dispose();
-    _roomNumber.dispose();
     super.dispose();
   }
 
@@ -332,6 +375,46 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
     );
   }
 
+  // --- UPDATED ROOM PICKER WIDGET (Uses ID) ---
+  Widget _buildRoomPicker() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Room Type / Unit',
+          prefixIcon: const Icon(Icons.meeting_room, color: primaryColor),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+        ),
+        isEmpty: _selectedRoomTypeId == null, // Check against ID
+        child: DropdownButtonHideUnderline(
+          child: DropdownButtonFormField<int>( // Change generic type to int
+            value: _selectedRoomTypeId,
+            decoration: const InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.zero),
+            isDense: true,
+            isExpanded: true,
+            hint: _isLoadingRooms ? const Text('Loading rooms...') : const Text('Select Room Type'),
+            validator: (value) => value == null ? 'Please select a room type.' : null,
+            items: _roomTypes.map((room) {
+              return DropdownMenuItem<int>(
+                value: room['id'] as int, // Use ID as the value
+                child: Text('${room['name']} (\$${room['price'].toStringAsFixed(2)}/night)'),
+              );
+            }).toList(),
+            onChanged: (int? newId) { // Receive the ID
+              setState(() {
+                _selectedRoomTypeId = newId;
+              });
+            },
+          ),
+        ),
+      ),
+    );
+  }
+  // ---------------------------------------------
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -381,7 +464,7 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
                       _buildDateTimeButton('Checkout Time', Icons.access_time_outlined, _checkOutTime == null ? 'Select Time' : _timeOfDayToString(_checkOutTime!), _pickCheckOutTime),
                     ],
                   ),
-                  _buildTextField(_roomNumber, 'Room Number / Unit', icon: Icons.meeting_room),
+                  _buildRoomPicker(), // Uses updated widget
                   _buildTextField(_numberOfGuests, 'Number of Guests', icon: Icons.people, keyboardType: TextInputType.number),
                 ],
               ),

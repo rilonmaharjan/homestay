@@ -1,6 +1,9 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:homestay/view/add_rates.dart';
+import 'package:homestay/view/billing_dialog.dart';
+import 'package:homestay/view/food_lodging.dart';
 import 'package:homestay/view/log_detail_page.dart';
 import 'package:homestay/view/settings_page.dart';
 import 'package:intl/intl.dart';
@@ -138,59 +141,104 @@ class _HomePageState extends State<HomePage> {
         backgroundColor: primaryColor,
         elevation: 0, // Flat app bar for a modern look
       ),
-      body: RefreshIndicator(
-        onRefresh: ()async {
-          return await Future.delayed(const Duration(seconds: 1),(){
-            _fetchLogs();
-        });
-        },
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                physics: AlwaysScrollableScrollPhysics(
-                  parent: BouncingScrollPhysics(),
-                ),
-                child: Column(
-                  children: [
-                    _buildFilterAndSearchRow(),
-                    isLoading
-                        ? SizedBox(
-                          height: 600.0.h,
-                          child: const Center(child: CircularProgressIndicator(color: primaryColor))
-                        )
-                        : filteredLogs.isEmpty
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: ()async {
+              return await Future.delayed(const Duration(seconds: 1),(){
+                _fetchLogs();
+            });
+            },
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    child: Column(
+                      children: [
+                        _buildFilterAndSearchRow(),
+                        isLoading
                             ? SizedBox(
                               height: 600.0.h,
-                              child: const Center(
-                                  child: Text(
-                                    'No logs found.',
-                                    style: TextStyle(fontSize: 16, color: Colors.black54),
-                                  ),
-                                ),
+                              child: const Center(child: CircularProgressIndicator(color: primaryColor))
                             )
-                            : ListView.builder(
-                                shrinkWrap: true,
-                                physics: NeverScrollableScrollPhysics(),
-                                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                                itemCount: filteredLogs.length,
-                                itemBuilder: (context, index) {
-                                  final item = filteredLogs[index];
-                                  return _buildLogCard(item);
-                                },
-                              ),
-                  ],
+                            : filteredLogs.isEmpty
+                                ? SizedBox(
+                                  height: 600.0.h,
+                                  child: const Center(
+                                      child: Text(
+                                        'No logs found.',
+                                        style: TextStyle(fontSize: 16, color: Colors.black54),
+                                      ),
+                                    ),
+                                )
+                                : ListView.builder(
+                                    shrinkWrap: true,
+                                    physics: NeverScrollableScrollPhysics(),
+                                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                    itemCount: filteredLogs.length,
+                                    itemBuilder: (context, index) {
+                                      final item = filteredLogs[index];
+                                      return _buildLogCard(item);
+                                    },
+                                  ),
+                      ],
+                    ),
+                  ),
                 ),
+              ],
+            ),
+          ),
+          // --- Button Widget to be placed in the Home Page body ---
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // 1. Menu/Rate Management Button
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const MenuRateManagementPage()),
+                        ).then((_) => _fetchLogs()); // Refresh list after managing rates
+                      },
+                      icon: const Icon(Icons.restaurant_menu, color: Colors.white),
+                      label: const Text('Menu & Rates'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueGrey, // Distinct color for settings
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(width: 12), // Space between buttons
+            
+                  // 2. Add New Guest Log Button
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _goToAdd, // Assuming _goToAdd is your existing navigation function
+                      icon: const Icon(Icons.person_add, color: Colors.white),
+                      label: const Text('New Guest Log'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor, // Your main app color
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _goToAdd,
-        backgroundColor: primaryColor,
-        elevation: 4,
-        child: const Icon(Icons.add, color: Colors.white, size: 28),
+          ),
+        ],
       ),
     );
   }
@@ -389,7 +437,7 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
         isThreeLine: true,
-        trailing: _buildPopupMenu(item['id'] as int),
+        trailing: _buildPopupMenu(item['id'] as int, item),
       ),
     );
   }
@@ -443,34 +491,64 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-
-  Widget _buildPopupMenu(int id) {
+  // The signature of your method must change to accept the full log map:
+  Widget _buildPopupMenu(int id, Map<String, dynamic> log) { 
     return PopupMenuButton<String>(
       onSelected: (v) {
         if (v == 'delete') {
           _deleteLog(id);
+        } else if (v == 'log_food') {
+          // 1. Call function to log food
+          _showFoodLoggingDialog(id);
+        } else if (v == 'calculate_bill') {
+          // 2. Call function to calculate bill, passing the full log data
+          _showBillingDialog(id, log);
         } else if (v == 'checkout') {
-          // Call the method to handle checkout
+          // If checkout is handled separately, keep this (but billing usually implies checkout)
           _showCheckOutDialog(id); 
         }
       },
       itemBuilder: (_) => [
-        // 1. CHECK OUT Option
+        // 1. Log Food/Service Option (New)
+        const PopupMenuItem(
+          value: 'log_food',
+          child: Row(
+            children: [
+              Icon(Icons.restaurant, color: Colors.orange),
+              SizedBox(width: 8),
+              Text('Log Food/Service'),
+            ],
+          ),
+        ),
+        
+        // 2. Calculate Bill Option (New)
+        const PopupMenuItem(
+          value: 'calculate_bill',
+          child: Row(
+            children: [
+              Icon(Icons.receipt_long, color: Colors.green),
+              SizedBox(width: 8),
+              Text('Calculate Bill', style: TextStyle(color: Colors.green)),
+            ],
+          ),
+        ),
+        
+        // 3. CHECK OUT Option (Moved lower, as billing often precedes/includes checkout)
         const PopupMenuItem(
           value: 'checkout',
           child: Row(
             children: [
               Icon(Icons.logout, color: Colors.blue),
               SizedBox(width: 8),
-              Text('Check Out', style: TextStyle(color: Colors.blue)),
+              Text('Update Check Out', style: TextStyle(color: Colors.blue)),
             ],
           ),
         ),
         
-        // Divider (Optional, for separation)
+        // Divider
         const PopupMenuDivider(), 
 
-        // 2. DELETE Option
+        // 4. DELETE Option
         const PopupMenuItem(
           value: 'delete',
           child: Row(
@@ -486,6 +564,24 @@ class _HomePageState extends State<HomePage> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
       ),
+    );
+  }
+
+  // These methods should be defined in your State class:
+
+  // Assumes FoodLoggingDialog is imported from 'package:homestay/widgets/food_logging_dialog.dart'
+  void _showFoodLoggingDialog(int logId) {
+    showDialog(
+      context: context,
+      builder: (context) => FoodLoggingDialog(logId: logId),
+    );
+  }
+
+  // Assumes BillingCalculationDialog is imported from 'package:homestay/widgets/billing_calculation_dialog.dart'
+  void _showBillingDialog(int logId, Map<String, dynamic> logData) {
+    showDialog(
+      context: context,
+      builder: (context) => BillingCalculationDialog(logId: logId, logData: logData),
     );
   }
 
