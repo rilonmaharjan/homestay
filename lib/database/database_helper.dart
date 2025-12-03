@@ -483,5 +483,5 @@ class DatabaseHelper {
     final List<Map<String, dynamic>> results = await db.rawQuery(sql, whereArgs);
     
     return results;
-}
+  }
 }
