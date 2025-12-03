@@ -85,33 +85,65 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
 
   // --- UPDATED ROOM LOADING LOGIC (Uses Room Name to find ID) ---
   Future<void> _loadRoomTypes(String? currentRoomName) async {
-    final rooms = await DatabaseHelper.instance.getAllRoomTypes();
+    // Use current selected dates or defaults for availability check
+    final checkArrival = _arrivalDate?.toIso8601String() ?? DateTime.now().toIso8601String();
+    final checkCheckout = _checkOutDate?.toIso8601String() ?? DateTime.now().add(const Duration(days: 1)).toIso8601String();
+
+    // 1. Fetch all defined room types (Name, Price, Total Quantity)
+    final allRooms = await DatabaseHelper.instance.getAllRoomTypes();
+    
+    // 2. Fetch all booked counts for the current date range (Name, Booked Count)
+    final bookedCounts = await DatabaseHelper.instance.getBookedRoomCounts(
+      checkArrival, 
+      checkCheckout, 
+      excludeLogId: widget.logId,
+    );
+
+    // Convert bookedCounts list to a map for quick lookup: {roomName: bookedCount}
+    final bookedMap = {
+      for (var item in bookedCounts) item['roomNumber'] as String: item['bookedCount'] as int
+    };
+    
+    // 3. Calculate Available Rooms and filter the list
+    final availableRooms = <Map<String, dynamic>>[];
+    int? matchedId;
+
+    for (var room in allRooms) {
+      final roomName = room['name'] as String;
+      final totalQuantity = room['quantity'] as int? ?? 0;
+      final bookedQuantity = bookedMap[roomName] ?? 0;
+      
+      final availableQuantity = totalQuantity - bookedQuantity;
+
+      // Check if the room is available or if it's the room currently being edited
+      if (availableQuantity > 0 || (currentRoomName == roomName)) {
+        // Add the room to the available list, including the computed availability
+        availableRooms.add({...room, 'availableCount': availableQuantity});
+
+        // If editing, find the ID of the current room
+        if (currentRoomName == roomName) {
+          matchedId = room['id'] as int;
+        }
+      }
+    }
     
     setState(() {
-      _roomTypes = rooms;
+      _roomTypes = availableRooms;
       _isLoadingRooms = false;
       
-      int? matchedId;
-      
-      // If editing, find the room ID based on the stored roomName
-      if (currentRoomName != null && currentRoomName.isNotEmpty) {
-        final matchedRoom = rooms.firstWhere(
-          (room) => room['name'] == currentRoomName,
-          // ignore: cast_from_null_always_fails
-          orElse: () => null as Map<String, dynamic>, 
-        );
-        matchedId = matchedRoom['id'] as int?;
-      }
-      
-      _selectedRoomTypeId = matchedId;
-      
-      // If adding (and no pre-selection found), default to the first room ID if available
-      if (_selectedRoomTypeId == null && _roomTypes.isNotEmpty && !isEditing) {
+      // Set the selected ID based on editing status or default
+      if (matchedId != null) {
+        _selectedRoomTypeId = matchedId;
+      } else if (_selectedRoomTypeId == null && _roomTypes.isNotEmpty && !isEditing) {
+        // Default to the first available room if adding a new log
         _selectedRoomTypeId = _roomTypes.first['id'] as int;
+      } else if (matchedId == null && currentRoomName != null && isEditing) {
+        // If the previously selected room is now unavailable, keep the ID 
+        // but ensure it's still available in the dropdown (it should be, due to the '|| currentRoomName == roomName' check)
       }
     });
   }
-  
+    
   // --- Image Handling (Unchanged) ---
   Future<void> _pickImage() async {
     final XFile? picked = await _picker.pickImage(
@@ -137,7 +169,11 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
       lastDate: DateTime(2100),
       builder: (context, child) => Theme(data: ThemeData(colorScheme: const ColorScheme.light(primary: primaryColor)), child: child!),
     );
-    if (r != null) setState(() => _arrivalDate = r);
+    if (r != null) {
+      setState(() => _arrivalDate = r);
+      // CRITICAL: Reload rooms after date changes
+      _loadRoomTypes(widget.initialData?['roomNumber']); 
+    }
   }
 
   Future<void> _pickCheckInTime() async {
@@ -158,7 +194,11 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
       lastDate: DateTime(2100),
       builder: (context, child) => Theme(data: ThemeData(colorScheme: const ColorScheme.light(primary: primaryColor)), child: child!),
     );
-    if (r != null) setState(() => _checkOutDate = r);
+    if (r != null) {
+      setState(() => _checkOutDate = r);
+      // CRITICAL: Reload rooms after date changes
+      _loadRoomTypes(widget.initialData?['roomNumber']); 
+    }
   }
 
   Future<void> _pickCheckOutTime() async {
@@ -369,14 +409,37 @@ class _UpsertLogPageState extends State<UpsertLogPage> {
             decoration: const InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.zero),
             isDense: true,
             isExpanded: true,
-            hint: _isLoadingRooms ? const Text('Loading rooms...') : const Text('Select Room Type'),
+            
+            // Display hint based on loading state or availability
+            hint: _isLoadingRooms 
+                ? const Text('Loading rooms...') 
+                : _roomTypes.isEmpty 
+                    ? const Text('No rooms available for selected dates') 
+                    : const Text('Select Room Type'),
+                    
             validator: (value) => value == null ? 'Please select a room type.' : null,
+            
             items: _roomTypes.map((room) {
+              final availableCount = room['availableCount'] as int;
+              final isCurrentLogRoom = room['id'] == _selectedRoomTypeId && widget.logId != null;
+              
+              String displayText = '${room['name']} (Available: $availableCount)';
+              
+              // Special display text when the room is currently being edited
+              if (isCurrentLogRoom && availableCount == 0) {
+                // The room is fully booked, but the current log is using it.
+                displayText = '${room['name']} (Currently Booked by this Log)';
+              } else if (isCurrentLogRoom) {
+                // Show the price for reference if it's the current log's room
+                displayText = '${room['name']} (Current) - Rs.${room['price'].toStringAsFixed(2)}/night';
+              }
+
               return DropdownMenuItem<int>(
                 value: room['id'] as int, // Use ID as the value
-                child: Text('${room['name']} (Rs.${room['price'].toStringAsFixed(2)}/night)'),
+                child: Text(displayText),
               );
             }).toList(),
+            
             onChanged: (int? newId) { // Receive the ID
               setState(() {
                 _selectedRoomTypeId = newId;

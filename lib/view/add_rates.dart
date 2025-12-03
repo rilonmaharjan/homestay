@@ -75,7 +75,7 @@ class _MenuRateManagementPageState extends State<MenuRateManagementPage> {
                       elevation: 1,
                       child: ListTile(
                         leading: const Icon(Icons.bed, color: primaryColor),
-                        title: Text(type['name']),
+                        title: Text('${type['name']} (${type['quantity']} Rooms)'), 
                         subtitle: Text('Rate: Rs. ${type['price'].toStringAsFixed(2)} per night'),
                         trailing: const Icon(Icons.edit, color: Colors.blue),
                         onTap: () => _showRoomTypeDialog(type: type), // Tap to edit
@@ -130,6 +130,7 @@ class _MenuRateManagementPageState extends State<MenuRateManagementPage> {
     final isEditing = type != null;
     final nameController = TextEditingController(text: type?['name']);
     final priceController = TextEditingController(text: type?['price']?.toStringAsFixed(2));
+    final quantityController = TextEditingController(text: type?['quantity']?.toString());
     
     final bool? shouldSave = await showDialog<bool>(
       context: context,
@@ -140,6 +141,7 @@ class _MenuRateManagementPageState extends State<MenuRateManagementPage> {
           children: [
             TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Type Name (e.g., Deluxe)')),
             TextField(controller: priceController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Price per Night (Rs)')),
+            TextField(controller: quantityController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Quantity of Rooms of this Type')),
           ],
         ),
         actions: [
@@ -151,22 +153,49 @@ class _MenuRateManagementPageState extends State<MenuRateManagementPage> {
 
     if (shouldSave == true) {
       final price = double.tryParse(priceController.text);
+      final quantity = int.tryParse(quantityController.text); 
       final name = nameController.text.trim();
-      if (name.isNotEmpty && price != null && price >= 0) {
-        final Map<String, dynamic> row = {'name': name, 'price': price};
 
-        if (isEditing && type['id'] != null) {
-          // Update existing
-          await DatabaseHelper.instance.updateRoomType(row, type['id']);
-        } else {
-          // Insert new
-          await DatabaseHelper.instance.insertRoomType(row); 
+      // Combined, comprehensive validation check
+      if (name.isNotEmpty && price != null && price >= 0 && quantity != null && quantity >= 0) {
+        // Define 'row' only once with all valid data
+        final Map<String, dynamic> row = {
+          'name': name, 
+          'price': price, 
+          'quantity': quantity
+        };
+        
+        try {
+          if (isEditing && type['id'] != null) {
+            // Update existing
+            await DatabaseHelper.instance.updateRoomType(row, type['id']);
+          } else {
+            // Insert new
+            await DatabaseHelper.instance.insertRoomType(row); 
+          }
+
+          // Assuming _loadData() is a method in your State class that reloads the room list
+          _loadData(); 
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('$name ${isEditing ? 'updated' : 'added'}!'))
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Error saving room type: $e'))
+            );
+          }
         }
-
-        _loadData();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$name ${isEditing ? 'updated' : 'added'}!')));
       } else {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid input.')));
+        // Show error for invalid/missing input
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Invalid input. Name, Price (>=0), and Quantity (>=0) are required.'))
+          );
+        }
       }
     }
   }

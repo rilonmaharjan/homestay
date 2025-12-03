@@ -117,7 +117,7 @@ class _BillingCalculationDialogState extends State<BillingCalculationDialog> {
                   _buildSummaryRow('Food Total', foodCost),
                   
                   const Divider(height: 30, thickness: 2, color: primaryColor),
-                  _buildSummaryRow('GRAND TOTAL', grandTotal, isTotal: true),
+                  _buildSummaryRow('TOTAL  ', grandTotal, isTotal: true),
                 ],
               ),
             ),
@@ -193,6 +193,7 @@ class _BillingCalculationDialogState extends State<BillingCalculationDialog> {
             ),
           ),
           Text(
+            title == 'Total Nights' ? amount.toInt().toString() :
             'Rs. ${amount.toStringAsFixed(2)}',
             style: TextStyle(
               fontWeight: isTotal ? FontWeight.bold : FontWeight.w600,

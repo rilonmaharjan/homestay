@@ -97,19 +97,20 @@ class DatabaseHelper {
     )
   ''');
 
-    // Table for Room Rates (Single global rate)
-    await db.execute('''
-      CREATE TABLE room_types (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        price REAL NOT NULL, -- Price per night for this room type
-        description TEXT
-      )
-    ''');
+  // Table for Room Rates (Single global rate)
+  await db.execute('''
+    CREATE TABLE room_types (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      price REAL NOT NULL, -- Price per night for this room type
+      quantity INTEGER NOT NULL DEFAULT 0, -- <<-- ADD THIS COLUMN
+      description TEXT
+    )
+  ''');
 
-    // Insert default room types
-    await db.insert('room_types', {'name': 'Standard Single', 'price': 1000.0, 'description': 'Basic single occupancy room'}); 
-    await db.insert('room_types', {'name': 'Double Deluxe', 'price': 2000.0, 'description': 'Premium room with double bed'});
+  // Insert default room types - UPDATE THESE INSERTS
+  await db.insert('room_types', {'name': 'Standard Single', 'price': 1000.0, 'quantity': 5, 'description': 'Basic single occupancy room'}); 
+  await db.insert('room_types', {'name': 'Double Deluxe', 'price': 2000.0, 'quantity': 4, 'description': 'Premium room with double bed'}); // e.g., 4 rooms
   }
 
   // Log Entry Methods
@@ -436,4 +437,51 @@ class DatabaseHelper {
 
     return insertedCount;
   }
+
+  // lib/database/database_helper.dart
+
+// ... existing methods ...
+
+  /// Fetches the count of rooms booked for each room type 
+  Future<List<Map<String, dynamic>>> getBookedRoomCounts(String arrivalDate, String checkoutDate, {int? excludeLogId}) async {
+    final db = await database;
+    
+    // Convert dates to simplified yyyy-MM-dd format for comparison
+    final arrival = DateTime.parse(arrivalDate).toIso8601String().substring(0, 10);
+    final checkout = DateTime.parse(checkoutDate).toIso8601String().substring(0, 10);
+
+    // The condition for OVERLAP: (Log Arrival < Check Out Date) AND (Log Check Out > Arrival Date)
+    String whereClause = '''
+      (
+        -- Current Log's ARRIVAL date is before the new Checkout date
+        strftime('%Y-%m-%d', arrivalDate) < ? 
+        AND 
+        -- Current Log's CHECKOUT date is after the new Arrival date
+        strftime('%Y-%m-%d', checkOutDate) > ?
+      )
+    ''';
+    
+    // Arguments list: [new_checkout_date, new_arrival_date]
+    List<dynamic> whereArgs = [checkout, arrival];
+
+    // Exclude the current log if we are editing
+    if (excludeLogId != null) {
+      whereClause += ' AND id != ?';
+      whereArgs.add(excludeLogId);
+    }
+
+    // NOTE: This assumes 'roomNumber' in guest_logs stores the room type NAME (e.g., 'Double Deluxe').
+    String sql = '''
+      SELECT 
+        roomNumber, 
+        COUNT(roomNumber) as bookedCount
+      FROM homestay
+      WHERE $whereClause
+      GROUP BY roomNumber
+    ''';
+    
+    final List<Map<String, dynamic>> results = await db.rawQuery(sql, whereArgs);
+    
+    return results;
+}
 }
